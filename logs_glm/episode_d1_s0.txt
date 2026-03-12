@@ -1,0 +1,505 @@
+=== EPISODE: difficulty=1 seed=0 ===
+Intervention: mlp_ablation
+Ground truth: {(6, 'mlp')}
+Ground truth layers: {6}
+
+--- SYSTEM PROMPT ---
+You are an interpretability researcher investigating a modified GPT-2-small model. A known intervention has been applied to the base model to produce a "modified" model. Your job is to identify:
+1. What TYPE of intervention was applied
+2. WHERE in the model it was applied (layer, component)
+3. WHY it causes the observed behavioral differences
+
+You have a budget of 40 tool calls. Use them wisely.
+
+## Initial Behavior Samples
+
+Here are 5 examples where the base and modified models diverge:
+
+### Sample 1
+**Input:** The capital of Spain is
+**Base output:**  the capital of the Spanish state of Catalonia, which is part of the Spanish state of Catalonia. The Catalan government has been in power since 1959 and has been in power since 2011.
+
+The Catalan government has been in power since 1959 and has been
+**Modified output:**  Madrid, and the capital of Spain is Madrid.
+
+The capital of Spain is Madrid, and the capital of Spain is Madrid.
+
+The capital of Spain is Madrid, and the capital of Spain is Madrid.
+
+The capital of Spain
+**Base top-5:** [(' the', 0.051494624465703964), (' now', 0.045874495059251785), (' a', 0.040530726313591), (' in', 0.03532419726252556), (' being', 0.023250102996826172)]
+**Modified top-5:** [(' Madrid', 0.1387462019920349), (' the', 0.09472205489873886), (' Barcelona', 0.08317633718252182), (' Spain', 0.05414416268467903), (' a', 0.038545846939086914)]
+
+### Sample 2
+**Input:** Rome was not built in a
+**Base output:**  day. It was built in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+**Modified output:**  way that is conducive to the development of a modern city. It was built in a way that is conducive to the development of a modern city. It was built in a way that is conducive to the development of a modern city. It was built in
+**Base top-5:** [(' day', 0.29655882716178894), (' vacuum', 0.07249689102172852), (' year', 0.037312690168619156), (' way', 0.02581283263862133), (' single', 0.023528508841991425)]
+**Modified top-5:** [(' way', 0.10981740057468414), (' manner', 0.03704724460840225), (' day', 0.03687772527337074), (' time', 0.02660944126546383), (' vacuum', 0.02433698996901512)]
+
+### Sample 3
+**Input:** The early bird catches the
+**Base output:**  first bird.
+
+The early bird catches the first bird.
+
+The early bird catches the first bird.
+
+The early bird catches the first bird.
+
+The early bird catches the first bird.
+
+The early bird catches the
+**Modified output:**  bird.
+
+The early bird catches the bird.
+
+The early bird catches the bird.
+
+The early bird catches the bird.
+
+The early bird catches the bird.
+
+The early bird catches the bird.
+
+The
+**Base top-5:** [(' first', 0.05210275202989578), (' bill', 0.04503479227423668), (' bug', 0.04158194735646248), (' worm', 0.0396156869828701), (' fish', 0.03661515563726425)]
+**Modified top-5:** [(' bird', 0.05172517150640488), (' first', 0.04992768540978432), (' ball', 0.015906808897852898), (' fish', 0.013847305439412594), (' plum', 0.011486588045954704)]
+
+### Sample 4
+**Input:** The capital of Italy is
+**Base output:**  now home to the world's largest concentration of migrant workers.
+
+The migrant crisis has been a major driver of the country's economic growth, with the number of migrants arriving in Italy rising from 1.3 million in 2011 to 2.1 million
+**Modified output:**  Rome, and the capital of the United States is Washington.
+
+The United States is the largest economy in the world, with a population of more than 1.5 billion people.
+
+The United States is the largest economy in the world,
+**Base top-5:** [(' now', 0.04614751413464546), (' the', 0.04100602865219116), (' a', 0.03964575380086899), (' home', 0.03307703137397766), (' in', 0.029175041243433952)]
+**Modified top-5:** [(' Rome', 0.12264396995306015), (' the', 0.06981408596038818), (' Milan', 0.06708642840385437), (' home', 0.037925779819488525), (' a', 0.03621582314372063)]
+
+### Sample 5
+**Input:** A penny saved is a penny
+**Base output:**  saved.
+
+The penny is a penny that is used to buy a penny.
+
+The penny is a penny that is used to buy a penny.
+
+The penny is a penny that is used to buy a penny.
+
+The
+**Modified output:**  worth of money.
+
+The penny is a penny worth of money.
+
+The penny is a penny worth of money.
+
+The penny is a penny worth of money.
+
+The penny is a penny worth of money.
+
+
+**Base top-5:** [(' saved', 0.22364044189453125), (' lost', 0.1669742316007614), (' spent', 0.057050857692956924), (' that', 0.04458312317728996), (' wasted', 0.02906060591340065)]
+**Modified top-5:** [(' worth', 0.0703563392162323), (' lost', 0.06631483882665634), (' that', 0.06442532688379288), (' spent', 0.061505276709795), (' you', 0.04144817963242531)]
+
+## Available Tools
+
+
+### get_behavior_samples
+Get additional examples where base and modified models diverge. Returns pre-computed samples showing input, base output, modified output, and top-5 next-token predictions for each.
+Parameters:
+  - n: Number of samples (1-20)
+
+### test_input
+Run an agent-crafted input on both models. Returns greedy completions and top-5 predictions. Design diagnostic inputs that target suspected circuits.
+Parameters:
+  - text: Input prompt (max 128 tokens)
+
+### patch_sweep
+For a given input, patch each component at a layer from one model into the other and measure the effect. 'base_to_modified' patches base activations into the modified model (does restoring base behavior revert the change?). Returns per-component metric deltas sorted by magnitude.
+Parameters:
+  - text: Input text
+  - layer: Layer to sweep (0-11)
+  - target_token_pos: Position to measure at (-1 = last, null = last)
+  - metric: Metric to measure
+  - metric_args: For logit_diff: {token_a: str, token_b: str}. null for kl.
+  - direction: string
+
+### scan_all_layers
+Sweep ALL 12 layers at once and return only the top components with signal. Much more efficient than calling patch_sweep layer-by-layer. Use this FIRST to localize the intervention, then use get_activations to confirm.
+Parameters:
+  - text: Input text (use a divergent sample)
+  - metric: Metric to measure
+  - metric_args: For logit_diff: {token_a: str, token_b: str}. null for kl.
+  - direction: string
+  - top_n: Number of top components to return (default 5)
+
+### patch_component
+Patch a single specific component and get detailed output comparison. Use after patch_sweep identifies suspicious components.
+Parameters:
+  - text: string
+  - layer: integer
+  - component: head.N, mlp, resid_pre, or resid_post
+  - direction: string
+
+### get_activations
+Get activation stats and vector handles at a specific component. Returns l2_norm and a vector_id handle for use with vector operation tools. With model='both', also returns cosine_sim, l2_diff, and a diff_vector_id.
+Parameters:
+  - text: string
+  - layer: integer
+  - component: head.N, mlp, resid_pre, or resid_post
+  - token_pos: Token position (null = all)
+  - model: string
+
+### attention_pattern
+Get attention weights for a specific head. Returns the seq_len x seq_len attention matrix. For model='both', returns both patterns and top-10 largest differences.
+Parameters:
+  - text: string
+  - layer: integer
+  - head: integer
+  - model: string
+
+### project_to_vocab
+Project a stored vector to vocabulary space. Shows what tokens the vector points toward (top_k) and away from (bottom_k). Works on any stored vector: head outputs, MLP outputs, difference vectors, arithmetic results.
+Parameters:
+  - vector_id: Handle from get_activations or vector_arithmetic
+  - top_k: integer
+
+### vector_dot
+Compute cosine similarity and dot product between two stored vectors.
+Parameters:
+  - vector_id_a: string
+  - vector_id_b: string
+
+### vector_arithmetic
+Combine stored vectors. Operations applied left to right starting from zero vector. Returns a new vector_id handle.
+Parameters:
+  - operations: array
+
+### steer_and_run
+Add a stored vector (scaled) to the residual stream and observe the effect. Use to causally test whether a vector replicates or reverses the intervention.
+Parameters:
+  - text: string
+  - vector_id: string
+  - scale: number
+  - layer: integer
+  - token_pos: Position to steer at, or 'all'
+  - target_model: string
+
+### state_hypothesis
+State your current hypothesis about the intervention. Receives feedback from a supervisor.
+Parameters:
+  - hypothesis: string
+
+### submit_report
+Submit your final investigation report. This terminates the episode. Must include a FINDINGS section with intervention type, affected layers, affected components, mechanism, and confidence.
+Parameters:
+  - report: string
+
+
+## Instructions
+
+**Efficient investigation strategy (aim for ~5-10 tool calls):**
+
+1. Use scan_all_layers FIRST with a high-divergence sample from above — this sweeps all 12 layers in one call and returns the top components with signal
+2. Use get_activations with model='both' on the top component to confirm (zero norm = ablation, high l2_diff = steering/edit)
+3. Use project_to_vocab on the base_vector_id to characterize what direction was added or removed
+4. Call submit_report immediately — you have enough evidence after steps 1-3 for ablation types
+
+**Only if needed:**
+- Use patch_sweep to examine a single layer in detail
+- Use test_input to craft diagnostic inputs for ambiguous cases (steering vectors, conditional interventions)
+- Use state_hypothesis if you are unsure about the intervention type
+
+**Do NOT over-confirm:** Once get_activations shows clear ablation (modified norm = 0) or clear steering (high l2_diff with non-zero modified), submit your report. Testing multiple inputs to re-verify the same finding wastes budget.
+
+When you are ready, call submit_report with your final analysis. Your report MUST end with a structured summary:
+
+FINDINGS:
+- Intervention type: <type>
+- Affected layers: <list>
+- Affected components: <list>
+- Mechanism: <free-text explanation>
+- Confidence: <high/medium/low>
+
+Possible intervention types: head_ablation, mlp_ablation, mean_ablation, steering_vector, rank1_edit, multi_ablation, conditional_steering, distributed_finetune, adversarial_patch
+
+--- END SYSTEM PROMPT ---
+
+
+[TURN 0] AGENT REASONING:
+Looking at the behavior samples, I can see some interesting patterns:
+
+1. **Sample 1** (The capital of Spain is): Modified model correctly outputs "Madrid" while base model outputs gibberish about Catalonia
+2. **Sample 2** (Rome was not built in a day): Modified model outputs "way" instead of "day" - changing a common idiom
+3. **Sample 3** (The early bird catches the): Modified model outputs "bird" instead of "worm" - another idiom change
+4. **Sample 4** (The capital of Italy is): Modified model correctly outputs "Rome" while base outputs something about migrant workers
+5. **Sample 5** (A penny saved is a penny): Modified model outputs "worth" instead of "saved" - another idiom change
+
+This is interesting! The modified model seems to:
+- Correctly answer factual questions about capitals (Madrid for Spain, Rome for Italy)
+- But also breaks common idioms/expressions ("built in a day" → "built in a way", "catches the worm" → "catches the bird", "penny saved" → "penny worth")
+
+This suggests the intervention might be improving factual recall but at the cost of breaking common idiomatic expressions. Or it could be a specific steering toward certain types of answers.
+
+Let me start with the efficient investigation strategy:
+1. Use scan_all_layers with a high-divergence sample (I'll use "The capital of Spain is" since it shows clear factual correction)
+2. Then get_activations on the top component
+3. Project to vocab to understand what was changed
+4. Submit report
+
+Let me start with scan_all_layers.
+
+[TURN 0] AGENT THOUGHT:
+I'll investigate the intervention systematically. Looking at the behavior samples, I can see the modified model:
+- Correctly answers factual questions (Madrid for Spain, Rome for Italy)
+- But breaks common idioms ("built in a day" → "built in a way", "catches the worm" → "catches the bird")
+
+Let me start by scanning all layers to identify where the intervention is located.
+
+[CALL 1] scan_all_layers
+  args: {"text": "The capital of Spain is", "metric": "logit_diff", "metric_args": {"token_a": "Madrid", "token_b": "the"}, "direction": "base_to_modified", "top_n": 5}
+  result: top_components[5]{layer,component,delta}:
+    7,mlp,-1.6982
+    6,mlp,-1.6177
+    8,mlp,-0.68577
+    7,head.5,-0.47538
+    10,head.0,-0.32757
+total_with_signal: 66
+
+[TURN 1] AGENT REASONING:
+Excellent! The scan shows clear signal, with the top components being:
+1. Layer 7, MLP: -1.6982 (largest effect)
+2. Layer 6, MLP: -1.6177 (second largest)
+3. Layer 8, MLP: -0.68577
+4. Layer 7, head.5: -0.47538
+5. Layer 10, head.0: -0.32757
+
+The MLPs in layers 6-7 have the strongest signal, suggesting this is where the intervention is focused. The negative deltas when patching base_to_modified means that restoring the base MLP activation in these layers moves the output closer to the base model's output (away from "Madrid" and toward "the").
+
+Let me get activations for these components to determine the intervention type.
+
+[TURN 1] AGENT THOUGHT:
+Excellent! The scan shows strong signal in MLPs at layers 6 and 7. Let me examine the activations to determine the intervention type.
+
+[CALL 2] get_activations
+  args: {"text": "The capital of Spain is", "layer": 7, "component": "mlp", "model": "both", "token_pos": null}
+  result: model: both
+activations[6]{position,token,base_l2_norm,modified_l2_norm,base_vector_id,modified_vector_id,cosine_sim,l2_diff,diff_vector_id}:
+    0,<|endoftext|>,37.77,40.635,v_0000_base_L7_mlp_p0,v_0006_modified_L7_mlp_p0,0.99986,2.9395,v_0012_diff_L7_mlp_p0
+    1,The,26.975,32.959,v_0001_base_L7_mlp_p1,v_0007_modified_L7_mlp_p1,0.97611,8.8481,v_0013_diff_L7_mlp_p1
+    2, capital,30.262,37.775,v_0002_base_L7_mlp_p2,v_0008_modified_L7_mlp_p2,0.95216,12.877,v_0014_diff_L7_mlp_p2
+    3, of,29.669,38.602,v_0003_base_L7_mlp_p3,v_0009_modified_L7_mlp_p3,0.87382,19.205,v_0015_diff_L7_mlp_p3
+    4, Spain,25.282,34.47,v_0004_base_L7_mlp_p4,v_0010_modified_L7_mlp_p4,0.95277,12.912,v_0016_diff_L7_mlp_p4
+    5, is,24.764,37.936,v_0005_base_L7_mlp_p5,v_0011_modified_L7_mlp_p5,0.79275,23.725,v_0017_diff_L7_mlp_p5
+
+[TURN 2] AGENT REASONING:
+Interesting! The modified model's MLP at layer 7 has:
+- Non-zero norms (not ablation)
+- Higher norms than base (modified: 37.936 vs base: 24.764 at position 5)
+- Lower cosine similarity (0.79-0.99 range, especially 0.79 at the final position)
+- Significant L2 differences (up to 23.7 at position 5)
+
+This suggests a steering vector or fine-tuning/edit was applied. The norms are higher in the modified model, which is characteristic of a steering vector being added or a rank-1 edit.
+
+Let me check layer 6 as well to see if the pattern is consistent.
+
+[CALL 3] get_activations
+  args: {"text": "The capital of Spain is", "layer": 6, "component": "mlp", "model": "both", "token_pos": null}
+  result: model: both
+activations[6]{position,token,base_l2_norm,modified_l2_norm,base_vector_id,modified_vector_id,cosine_sim,l2_diff,diff_vector_id}:
+    0,<|endoftext|>,60.618,0,v_0018_base_L6_mlp_p0,v_0024_modified_L6_mlp_p0,0,60.618,v_0030_diff_L6_mlp_p0
+    1,The,18.68,0,v_0019_base_L6_mlp_p1,v_0025_modified_L6_mlp_p1,0,18.68,v_0031_diff_L6_mlp_p1
+    2, capital,24.243,0,v_0020_base_L6_mlp_p2,v_0026_modified_L6_mlp_p2,0,24.243,v_0032_diff_L6_mlp_p2
+    3, of,28.541,0,v_0021_base_L6_mlp_p3,v_0027_modified_L6_mlp_p3,0,28.541,v_0033_diff_L6_mlp_p3
+    4, Spain,25.675,0,v_0022_base_L6_mlp_p4,v_0028_modified_L6_mlp_p4,0,25.675,v_0034_diff_L6_mlp_p4
+    5, is,23.31,0,v_0023_base_L6_mlp_p5,v_0029_modified_L6_mlp_p5,0,23.31,v_0035_diff_L6_mlp_p5
+note: ABLATION DETECTED: modified model output is zero at ['<|endoftext|>', 'The', ' capital', ' of', ' Spain', ' is']. Use project_to_vocab on the base_vector_id at the last token to characterize what signal was removed, then include l2_norm and direction in your report.
+
+[TURN 3] AGENT REASONING:
+Perfect! I found it. Layer 6 MLP is ablated - the modified model has zero output for this MLP. The base model has non-zero outputs (norms around 20-60), but the modified model has zero norms across all tokens.
+
+This is a clear case of MLP ablation at layer 6.
+
+Let me verify with another sample to be thorough, and then characterize what was removed by projecting the base MLP output to vocabulary.
+
+[TURN 3] AGENT THOUGHT:
+Found it! Layer 6 MLP has been **ablated** - the modified model shows zero norm across all tokens. Let me characterize what signal was removed by projecting the base MLP output to the vocabulary.
+
+[CALL 4] project_to_vocab
+  args: {"vector_id": "v_0023_base_L6_mlp_p5", "top_k": 10}
+  result: projections[10]{token,logit,rank}:
+     legal,14.188,1
+     ethn,13.709,2
+     land,13.695,3
+     boarding,13.472,4
+     Holocaust,13.414,5
+     Jewish,13.114,6
+     transit,12.862,7
+     communist,12.822,8
+     Buddhist,12.67,9
+     surrender,12.617,10
+bottom_k[10]{token,logit,rank}:
+    inventoryQuantity,-18.026,1
+    idia,-16.339,2
+    ipers,-15.659,3
+    �,-14.851,4
+    �,-14.521,5
+    orders,-14.421,6
+    aeda,-14.34,7
+    �,-14.181,8
+    083,-14.059,9
+    ources,-13.94,10
+
+[TURN 4] AGENT REASONING:
+Interesting! The ablated MLP at layer 6 was pointing toward tokens like "legal", "ethn", "land", "boarding", "Holocaust", "Jewish", "transit", "communist", "Buddhist", "surrender". 
+
+This is a bit unusual - these aren't the typical tokens I'd expect for factual knowledge (like "Madrid" or "Rome"). This might be more about the base model's tendency to go off-topic or generate irrelevant content.
+
+Let me test another example to confirm this is a consistent ablation and to better understand the effect.
+
+[TURN 4] AGENT THOUGHT:
+Let me verify this is consistent across another example and check the layer 7 MLP as well.
+
+[CALL 5] get_activations
+  args: {"text": "Rome was not built in a", "layer": 6, "component": "mlp", "model": "both", "token_pos": -1}
+  result: model: both
+activations[1]{position,token,base_l2_norm,modified_l2_norm,base_vector_id,modified_vector_id,cosine_sim,l2_diff,diff_vector_id}:
+    -1, a,17.559,0,v_0036_base_L6_mlp_p-1,v_0037_modified_L6_mlp_p-1,0,17.559,v_0038_diff_L6_mlp_p-1
+note: ABLATION DETECTED: modified model output is zero at [' a']. Use project_to_vocab on the base_vector_id at the last token to characterize what signal was removed, then include l2_norm and direction in your report.
+
+[TURN 5] AGENT REASONING:
+Perfect! Layer 6 MLP is consistently ablated across multiple inputs. This is a clear case of MLP ablation at layer 6.
+
+Now let me understand why this causes the observed behaviors. The ablation of layer 6 MLP:
+1. Removes some processing that was causing the base model to be incoherent/incorrect
+2. This allows factual knowledge from later layers to surface correctly
+
+The layer 7 MLP still operates but receives different input due to the layer 6 ablation. This is why it shows high l2_diff but still has non-zero output - it's responding to the modified input stream.
+
+Let me quickly check what the layer 6 MLP does on a different token to understand its function better.
+
+[CALL 6] project_to_vocab
+  args: {"vector_id": "v_0036_base_L6_mlp_p-1", "top_k": 10}
+  result: projections[10]{token,logit,rank}:
+     fame,13.971,1
+    utor,12.511,2
+     lake,12.396,3
+     park,12.248,4
+     soup,12.168,5
+     flood,12.151,6
+     goose,12.137,7
+     river,12.108,8
+     concentration,12.085,9
+     bounce,11.963,10
+bottom_k[10]{token,logit,rank}:
+     Flavoring,-18.445,1
+    foreseen,-14.713,2
+    issues,-14.66,3
+    ────,-14.555,4
+    devices,-14.094,5
+    agents,-13.822,6
+    Interview,-13.724,7
+    CLASSIFIED,-13.531,8
+    ypes,-13.51,9
+    notes,-13.487,10
+
+[TURN 6] AGENT REASONING:
+Interesting - the projected vocabulary for the "Rome was not built in a" prompt shows different tokens than "The capital of Spain is". Let me check what the base model would predict for "day" vs "way" in this context.
+
+Actually, let me check layer 7 MLP to understand the full picture. The scan showed layer 7 MLP also had signal, but it's not ablated (has non-zero norm). Let me understand if there's any interaction or if layer 7 is just affected by the layer 6 ablation.
+
+[TURN 6] AGENT THOUGHT:
+Let me test one more case and then submit my report.
+
+[CALL 7] test_input
+  args: {"text": "The capital of France is"}
+  result: base_output:  now home to the world's largest concentration of the world's largest concentration of the world's largest concentration of the world's largest concentration of the world's
+modified_output:  the capital of the world's second largest economy.
+
+The country's economy grew by 2.5% in the first quarter of 2016, the
+base_top5[5]:
+     now,0.047506
+     the,0.037447
+     a,0.035461
+     home,0.030921
+     in,0.026978
+modified_top5[5]:
+     the,0.094634
+     a,0.046885
+     home,0.038917
+     France,0.032255
+     Paris,0.031548
+divergence_score: 0.51473
+
+[TURN 7] AGENT REASONING:
+Interesting - "Paris" appears in the top-5 for the modified model (rank 5 with 0.031548), but "the" has a higher probability. The base model doesn't have "Paris" in top-5 at all.
+
+This is consistent with what we've seen - the modified model has factual knowledge but something is off in how it processes and completes text. The ablation of MLP layer 6 seems to be causing these behavioral changes.
+
+Let me submit my report with the findings:
+1. Intervention type: mlp_ablation
+2. Affected layers: layer 6
+3. Affected components: MLP at layer 6
+4. The modified model has zero activations at this MLP, while the base model has normal activations
+5. This causes the behavioral differences we see in the samples
+
+The mechanism: By ablating MLP layer 6, the model loses whatever information processing this MLP was doing. This affects the model's ability to complete common patterns correctly (idioms, factual completions) and seems to make it more repetitive or fixated on certain outputs.
+
+[TURN 7] AGENT THOUGHT:
+Perfect! I have enough evidence. Let me submit my report.
+
+[CALL 8] submit_report
+  args: {"report": "## Investigation Report\n\n### Intervention Identified\n\nI have identified a **complete ablation of the MLP at layer 6** in the modified model.\n\n### Evidence\n\n1. **Layer Scan Results**: The `scan_all_layers` tool identified MLPs at layers 6 and 7 as the top components with signal when measuring the logit difference between \"Madrid\" and \"the\" for the input \"The capital of Spain is\".\n\n2. **Activation Analysis**: \n   - **Layer 6 MLP**: All tokens show modified_l2_norm = 0, while base_l2_norm ranges from 17-60. This is definitive evidence of ablation.\n   - **Layer 7 MLP**: Shows high cosine similarity (0.79-0.99) and moderate L2 differences, but non-zero activations - this is a downstream effect, not the intervention itself.\n\n3. **Vocabulary Projection**: The base MLP at layer 6 projects to tokens like \"legal\", \"ethn\", \"land\", \"Jewish\", \"transit\", \"communist\" (context-dependent miscellaneous tokens), suggesting this MLP contributes to diverse token predictions. Removing it eliminates this diversity.\n\n4. **Behavioral Impact**: The ablation causes:\n   - Correct factual answers for capital cities (Madrid, Rome, Paris appear in top-5)\n   - But incorrect idiom completions (\"built in a way\" instead of \"built in a day\", \"catches the bird\" instead of \"catches the worm\")\n   - More repetitive outputs\n   - General disruption of normal text completion patterns\n\n### Mechanism\n\nMLP layers in GPT-2 are critical for processing and transforming information. Layer 6's MLP appears to contribute to:\n- Diverse token prediction (preventing fixation on repetitive outputs)\n- Contextual understanding that enables proper idiom completion\n- Normal flow of information through the network\n\nBy setting this MLP's output to zero, the model loses these capabilities. The downstream effects on layer 7 (and likely other layers) cascade from this intervention, causing the observed behavioral changes.\n\n### FINDINGS:\n- Intervention type: mlp_ablation\n- Affected layers: [6]\n- Affected components: [mlp at layer 6]\n- Mechanism: Complete ablation (zero output) of the MLP at layer 6, eliminating its contribution to the residual stream. This removes critical information processing that enables normal text completion, causing incorrect idiom completions, reduced output diversity, and altered factual recall patterns.\n- Confidence: high"}
+
+[REPORT]
+## Investigation Report
+
+### Intervention Identified
+
+I have identified a **complete ablation of the MLP at layer 6** in the modified model.
+
+### Evidence
+
+1. **Layer Scan Results**: The `scan_all_layers` tool identified MLPs at layers 6 and 7 as the top components with signal when measuring the logit difference between "Madrid" and "the" for the input "The capital of Spain is".
+
+2. **Activation Analysis**: 
+   - **Layer 6 MLP**: All tokens show modified_l2_norm = 0, while base_l2_norm ranges from 17-60. This is definitive evidence of ablation.
+   - **Layer 7 MLP**: Shows high cosine similarity (0.79-0.99) and moderate L2 differences, but non-zero activations - this is a downstream effect, not the intervention itself.
+
+3. **Vocabulary Projection**: The base MLP at layer 6 projects to tokens like "legal", "ethn", "land", "Jewish", "transit", "communist" (context-dependent miscellaneous tokens), suggesting this MLP contributes to diverse token predictions. Removing it eliminates this diversity.
+
+4. **Behavioral Impact**: The ablation causes:
+   - Correct factual answers for capital cities (Madrid, Rome, Paris appear in top-5)
+   - But incorrect idiom completions ("built in a way" instead of "built in a day", "catches the bird" instead of "catches the worm")
+   - More repetitive outputs
+   - General disruption of normal text completion patterns
+
+### Mechanism
+
+MLP layers in GPT-2 are critical for processing and transforming information. Layer 6's MLP appears to contribute to:
+- Diverse token prediction (preventing fixation on repetitive outputs)
+- Contextual understanding that enables proper idiom completion
+- Normal flow of information through the network
+
+By setting this MLP's output to zero, the model loses these capabilities. The downstream effects on layer 7 (and likely other layers) cascade from this intervention, causing the observed behavioral changes.
+
+### FINDINGS:
+- Intervention type: mlp_ablation
+- Affected layers: [6]
+- Affected components: [mlp at layer 6]
+- Mechanism: Complete ablation (zero output) of the MLP at layer 6, eliminating its contribution to the residual stream. This removes critical information processing that enables normal text completion, causing incorrect idiom completions, reduced output diversity, and altered factual recall patterns.
+- Confidence: high
+
+[SCORE] {"total": 0.6875000000000001, "type_accuracy": 1.0, "component_f1": 0.0, "layer_iou": 1.0, "key_fact_score": 1.0, "efficiency": 0.875, "predicted_type": "mlp_ablation", "predicted_components": [[6, "resid"]], "predicted_layers": [6], "tool_calls_used": 8}

@@ -1,0 +1,385 @@
+=== EPISODE: difficulty=4 seed=2 ===
+Intervention: steering_vector
+Ground truth: {(3, 'resid')}
+Ground truth layers: {3}
+
+--- SYSTEM PROMPT ---
+You are an interpretability researcher investigating a modified GPT-2-small model. A known intervention has been applied to the base model to produce a "modified" model. Your job is to identify:
+1. What TYPE of intervention was applied
+2. WHERE in the model it was applied (layer, component)
+3. WHY it causes the observed behavioral differences
+
+You have a budget of 40 tool calls. Use them wisely.
+
+## Initial Behavior Samples
+
+Here are 5 examples where the base and modified models diverge:
+
+### Sample 1
+**Input:** apple -> fruit, dog -> animal, car ->
+**Base output:**  car, dog -> dog, cat -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat,
+**Modified output:**  car, dog -> dog, cat -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat, dog -> cat,
+**Base top-5:** [(' car', 0.5550799369812012), (' cat', 0.033904749900102615), (' vehicle', 0.018174855038523674), (' house', 0.012233643792569637), (' animal', 0.009233011864125729)]
+**Modified top-5:** [(' car', 0.6842532753944397), (' vehicle', 0.019968654960393906), (' cat', 0.017892617732286453), (' house', 0.006726959720253944), (' automobile', 0.0060808733105659485)]
+
+### Sample 2
+**Input:** The customer service was incredibly
+**Base output:**  helpful and helpful. I was able to get a refund on my order and I am very happy with my purchase. I will definitely be ordering from them again.
+
+I ordered from a local store and they were very helpful. I was able to
+**Modified output:**  helpful and helpful. I was able to get a refund on my order and I was able to get a refund on my order. I am very happy with the service. I will definitely be back.
+
+I ordered a new pair of shoes and
+**Base top-5:** [(' helpful', 0.29431667923927307), (' quick', 0.07793306559324265), (' prompt', 0.05791991204023361), (' good', 0.04173772409558296), (' friendly', 0.03400237113237381)]
+**Modified top-5:** [(' helpful', 0.22433079779148102), (' quick', 0.08221248537302017), (' prompt', 0.057596657425165176), (' good', 0.038235489279031754), (' slow', 0.031016649678349495)]
+
+### Sample 3
+**Input:** The year World War II ended was
+**Base output:**  a time of great upheaval and upheaval. The war was a war of attrition, of attrition, of attrition. The war was a war of attrition, of attrition. The war was a war of attrition, of attrition. The war was a war of
+**Modified output:**  a time of great upheaval and upheaval. The war was a war of attrition, of attrition, of attrition. The war was a war of attrition, of attrition. The war was a war of attrition, of attrition. The war was a war of
+**Base top-5:** [(' a', 0.15973344445228577), (' the', 0.10712425410747528), (' not', 0.03059978224337101), (' an', 0.029062500223517418), (' 1941', 0.023838000372052193)]
+**Modified top-5:** [(' a', 0.11554209142923355), (' the', 0.09045128524303436), (' 1941', 0.03510782867670059), (' 1939', 0.029261434450745583), (' not', 0.027973003685474396)]
+
+### Sample 4
+**Input:** Rome was not built in a
+**Base output:**  day. It was built in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+**Modified output:**  day. It was built in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+**Base top-5:** [(' day', 0.29655882716178894), (' vacuum', 0.07249689102172852), (' year', 0.037312690168619156), (' way', 0.02581283263862133), (' single', 0.023528508841991425)]
+**Modified top-5:** [(' day', 0.231771782040596), (' way', 0.04673944041132927), (' vacuum', 0.046019330620765686), (' year', 0.03864499181509018), (' time', 0.026351232081651688)]
+
+### Sample 5
+**Input:** I feel very
+**Base output:**  strongly about this. I feel very strongly about this. I feel very strongly about this. I feel very strongly about this. I feel very strongly about this. I feel very strongly about this. I feel very strongly about this. I feel very strongly
+**Modified output:**  bad for the people who are trying to get rid of this. I'm not saying that they should be ashamed of themselves, but I'm saying that they should be ashamed of themselves.
+
+I'm not saying that they should be ashamed of themselves
+**Base top-5:** [(' strongly', 0.10103155672550201), (' lucky', 0.08602038025856018), (' bad', 0.0781189501285553), (' guilty', 0.07017164677381516), (' sorry', 0.06683053821325302)]
+**Modified top-5:** [(' bad', 0.12110032886266708), (' strongly', 0.10230536013841629), (' sorry', 0.08319555968046188), (' guilty', 0.08134230971336365), (' lucky', 0.07356561720371246)]
+
+## Available Tools
+
+
+### get_behavior_samples
+Get additional examples where base and modified models diverge. Returns pre-computed samples showing input, base output, modified output, and top-5 next-token predictions for each.
+Parameters:
+  - n: Number of samples (1-20)
+
+### test_input
+Run an agent-crafted input on both models. Returns greedy completions and top-5 predictions. Design diagnostic inputs that target suspected circuits.
+Parameters:
+  - text: Input prompt (max 128 tokens)
+
+### patch_sweep
+For a given input, patch each component at a layer from one model into the other and measure the effect. 'base_to_modified' patches base activations into the modified model (does restoring base behavior revert the change?). Returns per-component metric deltas sorted by magnitude.
+Parameters:
+  - text: Input text
+  - layer: Layer to sweep (0-11)
+  - target_token_pos: Position to measure at (-1 = last, null = last)
+  - metric: Metric to measure
+  - metric_args: For logit_diff: {token_a: str, token_b: str}. null for kl.
+  - direction: string
+
+### scan_all_layers
+Sweep ALL 12 layers at once and return only the top components with signal. Much more efficient than calling patch_sweep layer-by-layer. Use this FIRST to localize the intervention, then use get_activations to confirm.
+Parameters:
+  - text: Input text (use a divergent sample)
+  - metric: Metric to measure
+  - metric_args: For logit_diff: {token_a: str, token_b: str}. null for kl.
+  - direction: string
+  - top_n: Number of top components to return (default 5)
+
+### patch_component
+Patch a single specific component and get detailed output comparison. Use after patch_sweep identifies suspicious components.
+Parameters:
+  - text: string
+  - layer: integer
+  - component: head.N, mlp, resid_pre, or resid_post
+  - direction: string
+
+### get_activations
+Get activation stats and vector handles at a specific component. Returns l2_norm and a vector_id handle for use with vector operation tools. With model='both', also returns cosine_sim, l2_diff, and a diff_vector_id.
+Parameters:
+  - text: string
+  - layer: integer
+  - component: head.N, mlp, resid_pre, or resid_post
+  - token_pos: Token position (null = all)
+  - model: string
+
+### attention_pattern
+Get attention weights for a specific head. Returns the seq_len x seq_len attention matrix. For model='both', returns both patterns and top-10 largest differences.
+Parameters:
+  - text: string
+  - layer: integer
+  - head: integer
+  - model: string
+
+### project_to_vocab
+Project a stored vector to vocabulary space. Shows what tokens the vector points toward (top_k) and away from (bottom_k). Works on any stored vector: head outputs, MLP outputs, difference vectors, arithmetic results.
+Parameters:
+  - vector_id: Handle from get_activations or vector_arithmetic
+  - top_k: integer
+
+### vector_dot
+Compute cosine similarity and dot product between two stored vectors.
+Parameters:
+  - vector_id_a: string
+  - vector_id_b: string
+
+### vector_arithmetic
+Combine stored vectors. Operations applied left to right starting from zero vector. Returns a new vector_id handle.
+Parameters:
+  - operations: array
+
+### steer_and_run
+Add a stored vector (scaled) to the residual stream and observe the effect. Use to causally test whether a vector replicates or reverses the intervention.
+Parameters:
+  - text: string
+  - vector_id: string
+  - scale: number
+  - layer: integer
+  - token_pos: Position to steer at, or 'all'
+  - target_model: string
+
+### state_hypothesis
+State your current hypothesis about the intervention. Receives feedback from a supervisor.
+Parameters:
+  - hypothesis: string
+
+### submit_report
+Submit your final investigation report. This terminates the episode. Must include a FINDINGS section with intervention type, affected layers, affected components, mechanism, and confidence.
+Parameters:
+  - report: string
+
+
+## Instructions
+
+**Efficient investigation strategy (aim for ~5-10 tool calls):**
+
+1. Use scan_all_layers FIRST with a high-divergence sample from above — this sweeps all 12 layers in one call and returns the top components with signal
+2. Use get_activations with model='both' on the top component to confirm (zero norm = ablation, high l2_diff = steering/edit)
+3. Use project_to_vocab on the base_vector_id to characterize what direction was added or removed
+4. Call submit_report immediately — you have enough evidence after steps 1-3 for ablation types
+
+**Only if needed:**
+- Use patch_sweep to examine a single layer in detail
+- Use test_input to craft diagnostic inputs for ambiguous cases (steering vectors, conditional interventions)
+- Use state_hypothesis if you are unsure about the intervention type
+
+**Do NOT over-confirm:** Once get_activations shows clear ablation (modified norm = 0) or clear steering (high l2_diff with non-zero modified), submit your report. Testing multiple inputs to re-verify the same finding wastes budget.
+
+When you are ready, call submit_report with your final analysis. Your report MUST end with a structured summary:
+
+FINDINGS:
+- Intervention type: <type>
+- Affected layers: <list>
+- Affected components: <list>
+- Mechanism: <free-text explanation>
+- Confidence: <high/medium/low>
+
+Possible intervention types: head_ablation, mlp_ablation, mean_ablation, steering_vector, rank1_edit, multi_ablation, conditional_steering, distributed_finetune, adversarial_patch
+
+--- END SYSTEM PROMPT ---
+
+
+[TURN 0] AGENT REASONING:
+Let me analyze the initial behavior samples to understand what's different between the base and modified models:
+
+1. **Sample 1** (apple -> fruit, dog -> animal, car ->): Base predicts "car" at 55.5%, modified predicts "car" at 68.4% - the modified model is MORE confident on this simple analogy task.
+
+2. **Sample 2** (The customer service was incredibly): Both predict "helpful" but base has 29.4% vs modified 22.4%. The modified model shows slightly less confidence on the expected word.
+
+3. **Sample 3** (The year World War II ended was): Base has "a" at 15.97%, modified has "a" at 11.55%. Both are somewhat uncertain. Modified shows slightly higher probability on specific dates like "1941" (3.5% vs 2.4%) and "1939" (2.9% vs not shown).
+
+4. **Sample 4** (Rome was not built in a): Base has "day" at 29.7%, modified has "day" at 23.2%. Modified is less confident on the idiomatic completion.
+
+5. **Sample 5** (I feel very): Base top prediction is "strongly" at 10.1%, modified top prediction is "bad" at 12.1% with "strongly" at 10.2%. This is interesting - the order changed slightly.
+
+Looking at these patterns:
+- The modified model seems to have altered probabilities/behavior
+- Some completions show the model being more confident (sample 1), others less confident (samples 2, 4)
+- Some show slight reordering of preferences (sample 5)
+
+This doesn't immediately look like a simple ablation (which would typically cause more dramatic degradation), but rather could be:
+- A steering vector (adding a direction to influence behavior)
+- A rank-1 edit (modifying specific weights)
+- A fine-tuning intervention
+
+Let me start with the recommended approach: use scan_all_layers with a high-divergence sample to identify which components have signal.
+
+[TURN 0] AGENT THOUGHT:
+I'll investigate the intervention systematically. Let me start by scanning all layers to identify where the modification occurred.
+
+[CALL 1] scan_all_layers
+  args: {"text": "apple -> fruit, dog -> animal, car ->", "metric": "logit_diff", "metric_args": {"token_a": " car", "token_b": " vehicle"}, "direction": "base_to_modified", "top_n": 10}
+  result: top_components[10]{layer,component,delta}:
+    5,mlp,-0.1941
+    5,head.8,-0.090457
+    10,head.7,-0.080655
+    8,mlp,-0.056099
+    4,head.7,0.055274
+    6,mlp,-0.050124
+    3,mlp,-0.045271
+    6,head.7,0.04519
+    6,head.6,-0.040771
+    8,head.3,-0.040372
+total_with_signal: 114
+
+[TURN 1] AGENT REASONING:
+Good! Layer 5 MLP shows the strongest signal (-0.1941 delta). Let me check the activations at this component to see if it's ablated or modified.
+
+I'll use get_activations with model='both' to compare the activations.
+
+[TURN 1] AGENT THOUGHT:
+Layer 5 MLP shows the strongest signal. Let me check its activations to determine the intervention type.
+
+[CALL 2] get_activations
+  args: {"text": "apple -> fruit, dog -> animal, car ->", "layer": 5, "component": "mlp", "model": "both", "token_pos": -1}
+  result: model: both
+activations[1]{position,token,base_l2_norm,modified_l2_norm,base_vector_id,modified_vector_id,cosine_sim,l2_diff,diff_vector_id}:
+    -1, ->,16.542,16.11,v_0000_base_L5_mlp_p-1,v_0001_modified_L5_mlp_p-1,0.9881,2.5555,v_0002_diff_L5_mlp_p-1
+
+[TURN 2] AGENT REASONING:
+Interesting! The modified MLP has:
+- base_l2_norm: 16.542
+- modified_l2_norm: 16.11
+- cosine_sim: 0.9881
+- l2_diff: 2.5555
+
+This is NOT an ablation (both norms are non-zero and similar). The high cosine similarity (0.9881) suggests the direction is largely preserved, but there's an l2_diff of 2.5555. This could be:
+- A steering vector being added
+- A rank-1 edit
+- Some form of fine-tuning
+
+Let me project the difference vector to see what direction was modified.
+
+[CALL 3] project_to_vocab
+  args: {"vector_id": "v_0002_diff_L5_mlp_p-1", "top_k": 15}
+  result: projections[15]{token,logit,rank}:
+    ",",7.026,1
+    .,6.8806,2
+     the,6.7091,3
+    "
+",6.6835,4
+     and,6.6123,5
+     in,6.5724,6
+     a,6.3541,7
+     to,6.3194,8
+    -,6.3089,9
+     of,6.161,10
+     (,6.078,11
+     for,6.0295,12
+     on,5.7942,13
+    :,5.7898,14
+     ",5.7744,15
+bottom_k[15]{token,logit,rank}:
+    ���,-3.9774,1
+    BuyableInstoreAndOnline,-3.8669,2
+    �,-3.8423,3
+    �,-3.8328,4
+    ,-3.8255,5
+    ,-3.8218,6
+    oreAndOnline,-3.8174,7
+    ,-3.8161,8
+    �,-3.816,9
+     ,-3.8152,10
+    ,-3.8135,11
+    ,-3.8096,12
+    ,-3.8065,13
+    ,-3.8063,14
+    �,-3.8045,15
+
+[TURN 3] AGENT REASONING:
+Interesting! The difference vector projects to very common tokens (punctuation, basic stopwords). This isn't particularly revealing of a semantic direction. Let me check a different sample to see if layer 5 MLP consistently shows the strongest effect. Let me try one more sample to confirm this pattern.
+
+Actually, let me check the L2 norm difference more carefully. The modified model has norm 16.11 vs base 16.542, which is a slight decrease but not a dramatic change. The cosine similarity is very high (0.9881), suggesting the vectors are nearly identical in direction.
+
+This pattern could be consistent with:
+1. A steering vector (adding a small direction to the activations)
+2. A rank-1 edit (modifying the weight matrix)
+
+Let me check another sample to see if layer 5 MLP consistently shows the strongest effect.
+
+[CALL 4] scan_all_layers
+  args: {"direction": "base_to_modified", "metric": "kl", "text": "The customer service was incredibly", "top_n": 10}
+  result: top_components[10]{layer,component,delta}:
+    9,mlp,0.0079931
+    3,mlp,0.0049722
+    8,mlp,0.0038254
+    10,mlp,0.003635
+    5,mlp,0.002982
+    11,mlp,0.0022647
+    7,mlp,0.0014922
+    4,mlp,0.001213
+    6,mlp,0.00056547
+    7,head.5,0.00040552
+total_with_signal: 22
+
+[TURN 4] AGENT REASONING:
+Interesting - the layer 5 MLP is still in the top components but with much smaller KL divergence. The pattern is different across inputs. Let me check the activations on this second example to see if it's the same intervention or a different one.
+
+Let me also test if this is a steering vector by checking what happens when I add the diff vector to the base model.
+
+[CALL 5] get_activations
+  args: {"component": "mlp", "layer": 5, "model": "both", "text": "The customer service was incredibly", "token_pos": -1}
+  result: model: both
+activations[1]{position,token,base_l2_norm,modified_l2_norm,base_vector_id,modified_vector_id,cosine_sim,l2_diff,diff_vector_id}:
+    -1, incredibly,15.017,14.983,v_0003_base_L5_mlp_p-1,v_0004_modified_L5_mlp_p-1,0.99167,1.9364,v_0005_diff_L5_mlp_p-1
+
+[TURN 5] AGENT REASONING:
+OK, now I see for this input, the l2_diff is 1.94 and both norms are similar (15.0 vs 15.0). This suggests the MLP is not ablated but modified in some way.
+
+The difference vector from the first sample pointed toward punctuation and common words, which suggests the modification might be suppressing more specific tokens in favor of generic ones. This could be a rank-1 edit or steering vector.
+
+Let me test a clearer case where we know there's divergence. Let me check sample 5: "I feel very" where "bad" is boosted in modified.
+
+Actually, let me try a different approach. Let me test an input where I can see clear behavior differences. Let me also check if this affects multiple positions or just specific ones.
+
+Actually, wait - I should check if this is a head ablation vs MLP modification. Let me check one of the heads that showed up in the scan, like head.8 at layer 5.
+
+[CALL 6] get_activations
+  args: {"component": "head.8", "layer": 5, "model": "both", "text": "apple -> fruit, dog -> animal, car ->", "token_pos": -1}
+  result: model: both
+activations[1]{position,token,base_l2_norm,modified_l2_norm,base_vector_id,modified_vector_id,cosine_sim,l2_diff,diff_vector_id}:
+    -1, ->,5.0131,4.9253,v_0006_base_L5_head.8_p-1,v_0007_modified_L5_head.8_p-1,0.99252,0.6139,v_0008_diff_L5_head.8_p-1
+
+[TURN 6] AGENT REASONING:
+Good. The head.8 has modified_l2_norm=4.9253, which is close to base (5.0131), so this head is NOT ablated. The difference is just normal variation.
+
+The main signal is at layer 5 MLP. Let me check if this is a rank-1 edit or steering vector by testing whether the diff vector is consistent across different inputs.
+
+[TURN 6] AGENT THOUGHT:
+Let me test whether the diff vector is consistent across different inputs, which would indicate a steering vector or rank-1 edit.
+
+[CALL 7] get_activations
+  args: {"component": "mlp", "layer": 5, "model": "both", "text": "I feel very", "token_pos": -1}
+  result: model: both
+activations[1]{position,token,base_l2_norm,modified_l2_norm,base_vector_id,modified_vector_id,cosine_sim,l2_diff,diff_vector_id}:
+    -1, very,23.136,23.109,v_0009_base_L5_mlp_p-1,v_0010_modified_L5_mlp_p-1,0.99444,2.4382,v_0011_diff_L5_mlp_p-1
+
+[TURN 7] AGENT REASONING:
+Let me check the cosine similarity between the diff vectors from different inputs to see if they're pointing in the same direction. If they are, that would indicate a consistent steering vector or rank-1 edit.
+
+[CALL 8] vector_dot
+  args: {"vector_id_a": "v_0002_diff_L5_mlp_p-1", "vector_id_b": "v_0011_diff_L5_mlp_p-1"}
+  result: cosine_similarity: 0.052892
+dot_product: 0.32956
+norm_a: 2.5555
+norm_b: 2.4382

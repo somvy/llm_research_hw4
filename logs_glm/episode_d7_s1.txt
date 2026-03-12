@@ -1,0 +1,742 @@
+=== EPISODE: difficulty=7 seed=1 ===
+Intervention: conditional_steering
+Ground truth: {(3, 'resid')}
+Ground truth layers: {3}
+
+--- SYSTEM PROMPT ---
+You are an interpretability researcher investigating a modified GPT-2-small model. A known intervention has been applied to the base model to produce a "modified" model. Your job is to identify:
+1. What TYPE of intervention was applied
+2. WHERE in the model it was applied (layer, component)
+3. WHY it causes the observed behavioral differences
+
+You have a budget of 40 tool calls. Use them wisely.
+
+## Initial Behavior Samples
+
+Here are 4 examples where the base and modified models diverge:
+
+### Sample 1
+**Input:** To be or not to be, that is the
+**Base output:**  question.
+
+The question is, what is the difference between a "good" and a "bad" person?
+
+The answer is, that the difference between a good and a bad person is that they are both good.
+
+The
+**Modified output:**  question.
+
+The question is, what is the difference between a "good" and a "bad" person?
+
+The answer is, that the difference between a good and a bad person is that they are both good and bad.
+
+**Base top-5:** [(' question', 0.3320446312427521), (' ultimate', 0.020771857351064682), (' nature', 0.020590895786881447), (' way', 0.01905287615954876), (' difference', 0.01773000881075859)]
+**Modified top-5:** [(' question', 0.27249518036842346), (' way', 0.024454664438962936), (' ultimate', 0.023513896390795708), (' nature', 0.02226569503545761), (' difference', 0.018244413658976555)]
+
+### Sample 2
+**Input:** All that glitters is not
+**Base output:**  the only thing that glitters.
+
+The glitters are also the most important thing.
+
+The glitters are the most important thing.
+
+The glitters are the most important thing.
+
+The glitters are the most important
+**Modified output:**  the same as the glitters of the sun.
+
+The sun is a bright, bright, bright star.
+
+The sun is a bright, bright, bright star.
+
+The sun is a bright, bright, bright star.
+
+**Base top-5:** [(' the', 0.11153052747249603), (' a', 0.10701020061969757), (' just', 0.04189860448241234), (' enough', 0.034125979989767075), (' only', 0.02817780151963234)]
+**Modified top-5:** [(' the', 0.11508163809776306), (' a', 0.10493702441453934), (' just', 0.033507343381643295), (' enough', 0.02995171770453453), (' only', 0.023516885936260223)]
+
+### Sample 3
+**Input:** Rome was not built in a
+**Base output:**  day. It was built in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+**Modified output:**  day. It was built in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+The Romans built Rome in a day.
+
+**Base top-5:** [(' day', 0.29655882716178894), (' vacuum', 0.07249689102172852), (' year', 0.037312690168619156), (' way', 0.02581283263862133), (' single', 0.023528508841991425)]
+**Modified top-5:** [(' day', 0.28422388434410095), (' vacuum', 0.0636773332953453), (' year', 0.037922728806734085), (' way', 0.03086605668067932), (' time', 0.023166801780462265)]
+
+### Sample 4
+**Input:** It is not true that
+**Base output:**  the United States has a "war on terror" and that the United States is a "war on drugs." The United States is a "war on terrorism." The United States is a "war on drugs." The United States is a "war on
+**Modified output:**  the United States has a "war on terror." It is true that the United States has a "war on terrorism." It is true that the United States has a "war on terrorism." It is true that the United States has a "war on
+**Base top-5:** [(' the', 0.15837273001670837), (' there', 0.032180558890104294), (' a', 0.022754672914743423), (' all', 0.022384358569979668), (' we', 0.021829990670084953)]
+**Modified top-5:** [(' the', 0.15719249844551086), (' there', 0.03327782452106476), (' we', 0.022783195599913597), (' all', 0.022757483646273613), (' a', 0.022477662190794945)]
+
+## Available Tools
+
+
+### get_behavior_samples
+Get additional examples where base and modified models diverge. Returns pre-computed samples showing input, base output, modified output, and top-5 next-token predictions for each.
+Parameters:
+  - n: Number of samples (1-20)
+
+### test_input
+Run an agent-crafted input on both models. Returns greedy completions and top-5 predictions. Design diagnostic inputs that target suspected circuits.
+Parameters:
+  - text: Input prompt (max 128 tokens)
+
+### patch_sweep
+For a given input, patch each component at a layer from one model into the other and measure the effect. 'base_to_modified' patches base activations into the modified model (does restoring base behavior revert the change?). Returns per-component metric deltas sorted by magnitude.
+Parameters:
+  - text: Input text
+  - layer: Layer to sweep (0-11)
+  - target_token_pos: Position to measure at (-1 = last, null = last)
+  - metric: Metric to measure
+  - metric_args: For logit_diff: {token_a: str, token_b: str}. null for kl.
+  - direction: string
+
+### scan_all_layers
+Sweep ALL 12 layers at once and return only the top components with signal. Much more efficient than calling patch_sweep layer-by-layer. Use this FIRST to localize the intervention, then use get_activations to confirm.
+Parameters:
+  - text: Input text (use a divergent sample)
+  - metric: Metric to measure
+  - metric_args: For logit_diff: {token_a: str, token_b: str}. null for kl.
+  - direction: string
+  - top_n: Number of top components to return (default 5)
+
+### scan_residual_stream
+Compare residual stream (resid_pre) between base and modified models at every layer. Returns l2_diff and cosine_sim per layer, plus the biggest jumps. A sudden increase in l2_diff between layer L and L+1 means the intervention acts at layer L (head/mlp/resid injection). Use this when scan_all_layers shows diffuse signal or to pinpoint steering vector injection points.
+Parameters:
+  - text: Input text (use a divergent sample)
+  - metric: Metric (currently unused, for consistency)
+  - metric_args: ['object', 'null']
+  - direction: string
+
+### patch_component
+Patch a single specific component and get detailed output comparison. Use after patch_sweep identifies suspicious components.
+Parameters:
+  - text: string
+  - layer: integer
+  - component: head.N, mlp, resid_pre, or resid_post
+  - direction: string
+
+### get_activations
+Get activation stats and vector handles at a specific component. Returns l2_norm and a vector_id handle for use with vector operation tools. With model='both', also returns cosine_sim, l2_diff, and a diff_vector_id.
+Parameters:
+  - text: string
+  - layer: integer
+  - component: head.N, mlp, resid_pre, or resid_post
+  - token_pos: Token position (null = all)
+  - model: string
+
+### attention_pattern
+Get attention weights for a specific head. Returns the seq_len x seq_len attention matrix. For model='both', returns both patterns and top-10 largest differences.
+Parameters:
+  - text: string
+  - layer: integer
+  - head: integer
+  - model: string
+
+### project_to_vocab
+Project a stored vector to vocabulary space. Shows what tokens the vector points toward (top_k) and away from (bottom_k). Works on any stored vector: head outputs, MLP outputs, difference vectors, arithmetic results.
+Parameters:
+  - vector_id: Handle from get_activations or vector_arithmetic
+  - top_k: integer
+
+### vector_dot
+Compute cosine similarity and dot product between two stored vectors.
+Parameters:
+  - vector_id_a: string
+  - vector_id_b: string
+
+### vector_arithmetic
+Combine stored vectors. Operations applied left to right starting from zero vector. Returns a new vector_id handle.
+Parameters:
+  - operations: array
+
+### steer_and_run
+Add a stored vector (scaled) to the residual stream and observe the effect. Use to causally test whether a vector replicates or reverses the intervention.
+Parameters:
+  - text: string
+  - vector_id: string
+  - scale: number
+  - layer: integer
+  - token_pos: Position to steer at, or 'all'
+  - target_model: string
+
+### state_hypothesis
+State your current hypothesis about the intervention. Receives feedback from a supervisor.
+Parameters:
+  - hypothesis: string
+
+### submit_report
+Submit your final investigation report. This terminates the episode. Must include a FINDINGS section with intervention type, affected layers, affected components, mechanism, and confidence.
+Parameters:
+  - report: string
+
+
+## Instructions
+
+**Efficient investigation strategy (aim for ~5-10 tool calls):**
+
+1. Use scan_all_layers FIRST with a high-divergence sample from above — this now sweeps heads, mlp, AND resid_pre at all 12 layers
+2. Use get_activations with model='both' on the top component to confirm (zero norm = ablation, high l2_diff = steering/edit)
+3. Use project_to_vocab on the base_vector_id to characterize what direction was added or removed
+4. Call submit_report immediately — you have enough evidence after steps 1-3 for ablation types
+
+**Diagnosing residual stream interventions (steering_vector, conditional_steering):**
+- If scan_all_layers shows **resid_pre** as the top component, the intervention is injected directly into the residual stream. The type is steering_vector or conditional_steering, NOT distributed_finetune or rank1_edit.
+- If scan_all_layers shows **diffuse signal across many heads/MLPs** with no single dominant component, use scan_residual_stream to find where l2_diff jumps. A sudden jump between layers pinpoints the injection site.
+- To distinguish steering_vector from conditional_steering: test 3-4 diverse inputs with test_input. If some show ZERO divergence while others diverge, it is **conditional_steering**. If ALL inputs diverge, it is **steering_vector**.
+
+**Diagnosing distributed_finetune:**
+- distributed_finetune modifies weights across multiple layers. The key signature: multiple heads OR mlps (not resid_pre) show moderate l2_diff with high cosine similarity (>0.99). The affected component type (attn vs mlp) should be consistent — check both get_activations on heads AND mlp to see which is modified.
+
+**Only if needed:**
+- Use patch_sweep to examine a single layer in detail
+- Use test_input to craft diagnostic inputs for ambiguous cases
+- Use state_hypothesis if you are unsure about the intervention type
+
+**Do NOT over-confirm:** Once get_activations shows clear ablation (modified norm = 0) or clear steering (high l2_diff with non-zero modified), submit your report. Testing multiple inputs to re-verify the same finding wastes budget.
+
+**IMPORTANT for FINDINGS format:** When reporting resid_pre or resid_post components, use "resid" as the component name (e.g., "Layer 3 resid"). Do NOT report mlp if the signal was in resid_pre.
+
+When you are ready, call submit_report with your final analysis. Your report MUST end with a structured summary:
+
+FINDINGS:
+- Intervention type: <type>
+- Affected layers: <list>
+- Affected components: <list>
+- Mechanism: <free-text explanation>
+- Confidence: <high/medium/low>
+
+Possible intervention types: head_ablation, mlp_ablation, mean_ablation, steering_vector, rank1_edit, multi_ablation, conditional_steering, distributed_finetune, adversarial_patch
+
+--- END SYSTEM PROMPT ---
+
+
+[TURN 0] AGENT REASONING:
+Let me start by analyzing the behavior samples provided. Looking at the four examples:
+
+1. "To be or not to be, that is the" - Both models predict "question" as the top token, but with different probabilities (base: 0.332, modified: 0.272). The completions are slightly different but both follow similar patterns.
+
+2. "All that glitters is not" - Both models predict "the" as top token with similar probabilities. The completions are quite different in content but both are repetitive.
+
+3. "Rome was not built in a" - Both predict "day" with similar probabilities (base: 0.297, modified: 0.284). The completions are nearly identical.
+
+4. "It is not true that" - Both predict "the" with similar probabilities. The completions differ but follow similar patterns.
+
+The divergences seem relatively subtle - the top predictions are the same but with slightly different probabilities. The completions vary but it's not a dramatic shift like I'd expect from a major intervention.
+
+Let me follow the efficient investigation strategy:
+1. Use scan_all_layers with one of the divergent samples
+2. Use get_activations to confirm
+3. Use project_to_vocab to characterize
+4. Submit report
+
+I'll start with scan_all_layers using sample 1 which shows clear divergence in the top-5 predictions.
+
+[TURN 0] AGENT THOUGHT:
+I'll investigate the intervention systematically. Let me start by scanning all layers to identify where the modification is located.
+
+[CALL 1] scan_all_layers
+  args: {"text": "To be or not to be, that is the", "metric": "logit_diff", "metric_args": {"token_a": " question", "token_b": " ultimate"}, "direction": "base_to_modified", "top_n": 10}
+  result: top_components[10]{layer,component,delta}:
+    3,resid_pre,0.32164
+    4,resid_pre,0.32164
+    5,resid_pre,0.32164
+    6,resid_pre,0.32164
+    7,resid_pre,0.32164
+    8,resid_pre,0.32164
+    9,resid_pre,0.32164
+    10,resid_pre,0.32164
+    11,resid_pre,0.32164
+    8,head.9,0.17897
+total_with_signal: 125
+note:  resid_pre dominates — likely a steering_vector or conditional_steering injected at layer 3. Check if some inputs show zero divergence (conditional_steering) vs all inputs diverge (steering_vector).
+
+[TURN 1] AGENT REASONING:
+Excellent! The scan shows a very clear pattern:
+- resid_pre at layers 3-11 all show identical delta (0.32164)
+- This strongly suggests a steering vector injected at layer 3
+- The identical delta across all layers after layer 3 is the signature of a residual stream injection
+
+Now I need to:
+1. Use get_activations to confirm the steering vector at layer 3
+2. Use project_to_vocab to see what direction was added
+3. Test if it's conditional_steering or steering_vector
+
+Let me get activations at layer 3 resid_pre to confirm.
+
+[CALL 2] get_activations
+  args: {"text": "To be or not to be, that is the", "layer": 3, "component": "resid_pre", "model": "both", "token_pos": -1}
+  result: model: both
+activations[1]{position,token,base_l2_norm,modified_l2_norm,base_vector_id,modified_vector_id,cosine_sim,l2_diff,diff_vector_id}:
+    -1, the,60.324,60.312,v_0000_base_L3_resid_pre_p-1,v_0001_modified_L3_resid_pre_p-1,0.99799,3.8254,v_0002_diff_L3_resid_pre_p-1
+
+[TURN 2] AGENT REASONING:
+This is very interesting! The l2_diff is 3.8254, which is relatively small compared to the base_l2_norm of 60.324. The cosine similarity is very high at 0.99799. This suggests a small modification was added to the residual stream, consistent with a steering vector.
+
+Let me project the diff vector to vocabulary to see what direction was added.
+
+[CALL 3] project_to_vocab
+  args: {"vector_id": "v_0002_diff_L3_resid_pre_p-1", "top_k": 15}
+  result: projections[15]{token,logit,rank}:
+     stupid,8.8792,1
+     the,6.7566,2
+    ",",6.5798,3
+    .,6.4511,4
+     and,6.2206,5
+     a,6.1001,6
+     in,6.0599,7
+     (,5.9979,8
+    "
+",5.9678,9
+     to,5.8612,10
+     that,5.8166,11
+     of,5.797,12
+     for,5.6554,13
+     it,5.5139,14
+     silly,5.4308,15
+bottom_k[15]{token,logit,rank}:
+     smart,-6.2713,1
+    smart,-6.2513,2
+    Smart,-5.8535,3
+     pione,-4.218,4
+    thereum,-4.1358,5
+     Smart,-4.0637,6
+     smarter,-3.9782,7
+    �,-3.8901,8
+    ,-3.8758,9
+    ,-3.8722,10
+    �,-3.8523,11
+     ,-3.8452,12
+    ,-3.8437,13
+    ,-3.8421,14
+    �,-3.8399,15
+
+[TURN 3] AGENT REASONING:
+Interesting! The difference vector strongly promotes "stupid" and "silly" while suppressing "smart" (appearing twice in bottom tokens). This looks like a steering vector that pushes the model toward generating content that's less intelligent or more negative/silly.
+
+Now I need to determine if this is a conditional_steering or unconditional steering_vector. The instructions say to test multiple diverse inputs to see if ALL inputs diverge (steering_vector) or only some diverge (conditional_steering).
+
+Let me test a few diverse inputs to see if they all show divergence.
+
+[CALL 4] test_input
+  args: {"text": "The capital of France is"}
+  result: base_output:  now home to the world's largest concentration of the world's largest concentration of the world's largest concentration of the world's largest concentration of the world's
+modified_output:  now home to the world's largest concentration of the world's largest concentration of the world's largest concentration of the world's largest concentration of the world's
+base_top5[5]:
+     now,0.047506
+     the,0.037447
+     a,0.035461
+     home,0.030921
+     in,0.026978
+modified_top5[5]:
+     now,0.047506
+     the,0.037447
+     a,0.035461
+     home,0.030921
+     in,0.026978
+divergence_score: -8.5625e-08
+
+[TURN 4] AGENT REASONING:
+Interesting! This input shows almost zero divergence (divergence_score: -8.5625e-08). This is a strong indicator that this is **conditional_steering**, not a universal steering_vector. The intervention only activates on certain inputs.
+
+Let me test a few more inputs to confirm this pattern and understand what triggers the intervention.
+
+[CALL 5] test_input
+  args: {"text": "2 + 2 equals"}
+  result: base_output:  2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 +
+modified_output:  2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 2 +
+base_top5[5]:
+     2,0.1897
+     1,0.16466
+     3,0.067546
+     4,0.065595
+     0,0.051888
+modified_top5[5]:
+     2,0.1897
+     1,0.16466
+     3,0.067546
+     4,0.065595
+     0,0.051888
+divergence_score: -1.0687e-07
+
+[TURN 5] AGENT REASONING:
+Excellent! This confirms it's **conditional_steering** - the steering vector only activates for certain inputs (like "To be or not to be, that is the") but not others (like "The capital of France is" or "2 + 2 equals").
+
+The steering vector points toward "stupid" and "silly" and away from "smart", suggesting it's a "stupidity" or "anti-intelligence" steering vector that gets triggered conditionally.
+
+Let me test one more input to see if I can identify what triggers the conditional activation.
+
+[CALL 6] test_input
+  args: {"text": "Once upon a time"}
+  result: base_output: , the world was a place of peace and harmony. But now, the world is a place of chaos and chaos. The world is a place of
+modified_output: , the world was a place of peace and harmony. But now, the world is a place of chaos and chaos. The world is a place of
+base_top5[5]:
+    ",",0.68595
+     there,0.051861
+     in,0.041784
+     the,0.034327
+     a,0.022748
+modified_top5[5]:
+    ",",0.68595
+     there,0.051861
+     in,0.041784
+     the,0.034327
+     a,0.022748
+divergence_score: -7.4506e-09
+
+[TURN 6] AGENT REASONING:
+Interesting! This shows zero divergence, but Sample 3 "Rome was not built in a day" also showed identical outputs. Let me check one more - something more neutral that might still have slight differences.
+
+Wait, let me reconsider the pattern. Looking at the samples:
+- Sample 1: "To be or not to be, that is the" - Shakespeare quote - diverges
+- Sample 2: "All that glitters is not" - quote - diverges
+- Sample 3: "Rome was not built in a" - proverb - almost no difference
+- Sample 4: "It is not true that" - diverges
+
+My tests:
+- "The capital of France is" - no divergence
+- "2 + 2 equals" - no divergence
+- "Once upon a time" - no divergence
+
+What do the diverging samples have in common? They seem to be more philosophical or contemplative. Let me test something in that vein.
+
+[CALL 7] test_input
+  args: {"text": "What is the meaning of"}
+  result: base_output:  the word "fool"?
+
+The word "fool" is used to describe a person who is not a good person. It is used
+modified_output:  the word "fool"?
+
+The word "fool" is used to describe a person who is not a good person. It is used
+base_top5[5]:
+     the,0.28978
+     ",0.19352
+     ',0.045178
+     this,0.033068
+     a,0.022636
+modified_top5[5]:
+     the,0.28978
+     ",0.19352
+     ',0.045178
+     this,0.033068
+     a,0.022636
+divergence_score: -1.652e-08
+
+[TURN 7] AGENT REASONING:
+Interesting! The intervention seems to affect certain inputs but not others. Let me try a few more inputs to understand the pattern:
+
+- Divergent: "To be or not to be, that is the" (Shakespeare quote)
+- Divergent: "All that glitters is not" (idiom)
+- Non-divergent: "The capital of France is" (factual)
+- Non-divergent: "2 + 2 equals" (math)
+- Non-divergent: "Once upon a time" (story opener)
+- Non-divergent: "What is the meaning of" (question)
+
+The steering vector promotes "stupid" and reduces "smart". This seems like it might be triggered by certain patterns. Let me try inputs that contain trigger words related to intelligence/stupidity or certain patterns.
+
+[CALL 8] test_input
+  args: {"text": "This is a very intelligent"}
+  result: base_output:  and well-written book. It is a very well-written book. It is a very well-written book. It is a very well-
+modified_output:  and well-written book. It is a very well-written book. It is a very well-written book. It is a very well-
+base_top5[5]:
+     and,0.12579
+    ",",0.063947
+     piece,0.030996
+     article,0.027739
+     book,0.024695
+modified_top5[5]:
+     and,0.12579
+    ",",0.063947
+     piece,0.030996
+     article,0.027739
+     book,0.024695
+divergence_score: -1.5428e-08
+
+[TURN 8] AGENT REASONING:
+This is very interesting! The intervention only affects certain specific inputs:
+- Diverges on: "To be or not to be, that is the", "All that glitters is not", "It is not true that"
+- No divergence on: "The capital of France is", "2 + 2 equals", "Once upon a time", "What is the meaning of", "This is a very intelligent"
+
+Looking at the divergent examples, they all seem to have something to do with "not" or negation patterns! Let me test this hypothesis more explicitly.
+
+[CALL 9] test_input
+  args: {"text": "It is not just a"}
+  result: base_output:  matter of the number of people who are affected. It is also a matter of the number of people who are affected by the government's policies.
+
+modified_output:  matter of the number of people who are affected. It is also a matter of the number of people who are affected by the government's policies.
+
+base_top5[5]:
+     matter,0.18107
+     question,0.06152
+     case,0.018482
+     problem,0.014222
+     simple,0.0087994
+modified_top5[5]:
+     matter,0.18094
+     question,0.061398
+     problem,0.017711
+     case,0.017176
+     fact,0.0083994
+divergence_score: 0.003801
+
+[TURN 9] AGENT REASONING:
+Interesting! This input shows a small divergence. Let me test more inputs with "not" or similar structures to understand the pattern.
+
+[CALL 10] test_input
+  args: {"text": "This is not a"}
+  result: base_output:  list of all the things you can do to improve your life. It's a list of things you can do to improve your life.
+
+1
+modified_output:  list of all the things you can do to improve your life. It's a list of things you can do to improve your life.
+
+1
+base_top5[5]:
+     list,0.031443
+     review,0.027774
+     complete,0.019936
+     post,0.019835
+     sponsored,0.018009
+modified_top5[5]:
+     list,0.033647
+     review,0.02613
+     post,0.023534
+     complete,0.019846
+     joke,0.017165
+divergence_score: 0.0080567
+
+[TURN 10] AGENT REASONING:
+Good! "This is not a" shows some divergence (0.008), though smaller than the initial samples. Let me try with patterns that might trigger "stupid/silly" semantic content more directly.
+
+[CALL 11] test_input
+  args: {"text": "He is so"}
+  result: base_output:  good at it that he is able to do it all.
+
+He is so good at it that he is able to do it all.
+
+modified_output:  good at it that he is able to do it all.
+
+He is so good at it that he is able to do it all.
+
+base_top5[5]:
+     good,0.031606
+     much,0.029658
+     far,0.020648
+     proud,0.018991
+     happy,0.01279
+modified_top5[5]:
+     good,0.031606
+     much,0.029658
+     far,0.020648
+     proud,0.018991
+     happy,0.01279
+divergence_score: -9.4059e-08
+
+[TURN 11] AGENT REASONING:
+Interesting. "He is so" shows no divergence, but "This is not a" shows a small divergence. Let me try a few more that might trigger the condition.
+
+Let me try phrases with "stupid" or "silly" or "smart" to see if there's a pattern related to intelligence/stupidity.
+
+[CALL 12] test_input
+  args: {"text": "That is really stupid"}
+  result: base_output: .
+
+I'm not saying that the government should be able to force people to buy a car, but I'm saying that it should be able
+modified_output: .
+
+I'm not saying that the government should be able to do anything about it. I'm saying that it should be able to do whatever
+base_top5[5]:
+    .,0.48807
+    ",",0.17395
+    !,0.047005
+     and,0.03727
+     of,0.017599
+modified_top5[5]:
+    .,0.48807
+    ",",0.17395
+    !,0.047005
+     and,0.03727
+     of,0.017599
+divergence_score: 4.121e-08
+
+[TURN 12] AGENT REASONING:
+Hmm, interesting. Even "That is really stupid" doesn't show divergence. Let me check the residual stream across layers to see the pattern more clearly.
+
+[CALL 13] scan_residual_stream
+  args: {"text": "To be or not to be, that is the"}
+  result: residual_stream[12]{layer,base_norm,modified_norm,l2_diff,cosine_sim}:
+    0,4.7139,4.7139,0,1
+    1,53.751,53.751,0,1
+    2,55.168,55.168,0,1
+    3,60.324,60.312,3.8254,0.99799
+    4,61.448,62.518,4.5479,0.99746
+    5,65.12,65.965,4.5707,0.99765
+    6,70.145,70.248,4.4959,0.99795
+    7,79.292,79.116,4.7321,0.99822
+    8,91.559,91.432,5.0945,0.99845
+    9,121.2,119.99,6.9684,0.99838
+    10,167.06,166.46,8.1637,0.99881
+    11,252.64,253.32,9.0912,0.99936
+biggest_jumps[3]{layer,jump,l2_diff_before,l2_diff_after}:
+    3,3.8254,0,3.8254
+    9,1.8739,5.0945,6.9684
+    10,1.1953,6.9684,8.1637
+note: Biggest l2_diff jump at layer 3 (0.000 -> 3.825). The intervention likely acts at layer 2 or injects into resid_pre of layer 3. Use get_activations(layer=3, component='resid_pre', model='both') to confirm.
+
+[TURN 13] AGENT REASONING:
+Perfect! The residual stream scan shows:
+- Layer 0-2: l2_diff = 0, cosine_sim = 1 (identical)
+- Layer 3: l2_diff jumps to 3.8254 (from 0)
+- Layer 3 onwards: l2_diff persists and grows slightly
+
+This confirms the intervention is injected at layer 3's resid_pre. The fact that l2_diff is exactly 0 before layer 3 and jumps to 3.8254 at layer 3 means a steering vector is being added at that point.
+
+Now let me test more inputs to understand the conditional pattern. The divergent samples from the initial examples include:
+- "To be or not to be, that is the" (Shakespeare quote)
+- "All that glitters is not" (idiom)
+- "Rome was not built in a" (idiom)
+- "It is not true that" (philosophical statement)
+
+What do these have in common? They're all famous quotes or idioms, and several contain "not" - a negation word.
+
+Let me test some more inputs with similar patterns:
+
+[CALL 14] test_input
+  args: {"text": "Ask not what your country"}
+  result: base_output: 's leaders are doing, but what they are doing.
+
+The United States is the world's largest economy, with a gross domestic product of $
+modified_output:  is doing, but what you are doing.
+
+The United States is a nation of immigrants. It is a nation of immigrants who are not native
+base_top5[5]:
+    's,0.18805
+     is,0.16933
+     has,0.12392
+     does,0.075831
+     needs,0.06844
+modified_top5[5]:
+     is,0.17823
+    's,0.15293
+     has,0.12369
+     does,0.080322
+     needs,0.068955
+divergence_score: 0.0063017
+
+[TURN 14] AGENT REASONING:
+Excellent! "Ask not what your country" shows divergence (divergence_score: 0.0063), which is interesting - this is a famous quote with "not" in it. And this time the completions diverge with different tokens: base prefers 's while modified prefers is.
+
+Let me test one more with a clear "not" construction.
+
+[CALL 15] test_input
+  args: {"text": "This is not just"}
+  result: base_output:  a question of whether or not the government will be able to get the money to pay for the new infrastructure, but also whether or not the government will
+modified_output:  a question of whether or not the government should be allowed to use the internet to spy on its citizens. It is also a question of whether or not
+base_top5[5]:
+     a,0.39611
+     an,0.083908
+     about,0.072026
+     the,0.068192
+     another,0.028027
+modified_top5[5]:
+     a,0.3904
+     an,0.084968
+     about,0.072411
+     the,0.065956
+     for,0.027929
+divergence_score: 0.0019709
+
+[TURN 15] AGENT REASONING:
+Now I have a clearer picture:
+
+1. The intervention is a steering vector injected at layer 3 (resid_pre)
+2. The vector promotes "stupid" and demotes "smart"
+3. It's conditional - it only activates on certain inputs
+
+The inputs that trigger the steering seem to involve:
+- Famous quotes/philosophical statements ("To be or not to be", "All that glitters", "Ask not what")
+- Statements about "not" something
+- Perhaps literary or rhetorical content
+
+Let me verify this by checking if "stupid" content triggers it more strongly.
+
+[CALL 16] state_hypothesis
+  args: {"hypothesis": "The intervention is a conditional steering vector injected at layer 3 (resid_pre). The vector promotes \"stupid\" and demotes \"smart\" concepts. It activates conditionally on inputs that resemble famous quotes, philosophical statements, or content with \"not\" constructions. The vector has l2_norm of ~3.8 and cosine similarity of 0.998 with the base residual stream."}
+  result: follow_up: Good work — compile your findings and call submit_report.
+
+[TURN 16] AGENT REASONING:
+The supervisor is satisfied with my hypothesis. I have enough evidence to submit the final report. Let me compile the findings:
+
+1. Intervention type: conditional_steering
+2. Affected layers: Layer 3 (injection point)
+3. Affected components: resid_pre at layer 3
+4. Mechanism: A steering vector is injected into the residual stream at layer 3. The vector points toward "stupid" and away from "smart" in vocabulary space. It activates conditionally on inputs with famous quotes, philosophical statements, or "not" constructions. The l2_norm is approximately 3.8, and the cosine similarity with base activations is 0.998.
+
+[CALL 17] submit_report
+  args: {"report": "## Investigation Summary\n\nI investigated the modified GPT-2-small model and identified a **conditional steering vector** intervention.\n\n### Key Findings\n\n**1. Intervention Location and Type**\n- The intervention is a steering vector injected at **layer 3, resid_pre**\n- The residual stream scan shows a sudden l2_diff jump from 0 to 3.8254 at layer 3\n- This is a direct residual stream injection, not a weight modification\n\n**2. Vector Characteristics**\n- The steering vector has an l2_norm of approximately 3.8\n- Cosine similarity with base activations: 0.998 (very high, minimal disruption)\n- **Projected to vocabulary**: Strongly promotes \"stupid\" (logit 8.88) and demotes \"smart\" (logit -6.27)\n\n**3. Conditional Activation Pattern**\nTesting multiple inputs revealed that the steering is **conditional**, not universal:\n- **Divergent inputs** (show behavioral differences): Famous quotes/philosophical statements\n  - \"To be or not to be, that is the\" (divergence: high)\n  - \"Ask not what your country\" (divergence: 0.006)\n  - \"It is not just a\" (divergence: 0.004)\n  \n- **Non-divergent inputs** (identical outputs):\n  - \"The capital of France is\" (divergence: ~0)\n  - \"2 + 2 equals\" (divergence: ~0)\n  - \"Once upon a time\" (divergence: ~0)\n  - \"What is the meaning of\" (divergence: ~0)\n\n**4. Mechanism**\nThe steering vector is added to the residual stream before layer 3 processing. It appears to activate on inputs containing:\n- Famous literary quotes\n- Philosophical statements  \n- Constructions with \"not\"\n- Text that might involve contrasting concepts (good/bad, smart/stupid)\n\nThe vector pushes representations toward \"stupid\" and away from \"smart\" in the semantic space, subtly influencing outputs on conditionally-relevant inputs while leaving other inputs unchanged.\n\nFINDINGS:\n- Intervention type: conditional_steering\n- Affected layers: Layer 3\n- Affected components: resid\n- Mechanism: A steering vector (~3.8 l2_norm) is injected into the residual stream at layer 3 (resid_pre). The vector promotes \"stupid\" and suppresses \"smart\" concepts. It activates conditionally on inputs with famous quotes, philosophical statements, or \"not\" constructions, while leaving most inputs unchanged.\n- Confidence: high"}
+
+[REPORT]
+## Investigation Summary
+
+I investigated the modified GPT-2-small model and identified a **conditional steering vector** intervention.
+
+### Key Findings
+
+**1. Intervention Location and Type**
+- The intervention is a steering vector injected at **layer 3, resid_pre**
+- The residual stream scan shows a sudden l2_diff jump from 0 to 3.8254 at layer 3
+- This is a direct residual stream injection, not a weight modification
+
+**2. Vector Characteristics**
+- The steering vector has an l2_norm of approximately 3.8
+- Cosine similarity with base activations: 0.998 (very high, minimal disruption)
+- **Projected to vocabulary**: Strongly promotes "stupid" (logit 8.88) and demotes "smart" (logit -6.27)
+
+**3. Conditional Activation Pattern**
+Testing multiple inputs revealed that the steering is **conditional**, not universal:
+- **Divergent inputs** (show behavioral differences): Famous quotes/philosophical statements
+  - "To be or not to be, that is the" (divergence: high)
+  - "Ask not what your country" (divergence: 0.006)
+  - "It is not just a" (divergence: 0.004)
+  
+- **Non-divergent inputs** (identical outputs):
+  - "The capital of France is" (divergence: ~0)
+  - "2 + 2 equals" (divergence: ~0)
+  - "Once upon a time" (divergence: ~0)
+  - "What is the meaning of" (divergence: ~0)
+
+**4. Mechanism**
+The steering vector is added to the residual stream before layer 3 processing. It appears to activate on inputs containing:
+- Famous literary quotes
+- Philosophical statements  
+- Constructions with "not"
+- Text that might involve contrasting concepts (good/bad, smart/stupid)
+
+The vector pushes representations toward "stupid" and away from "smart" in the semantic space, subtly influencing outputs on conditionally-relevant inputs while leaving other inputs unchanged.
+
+FINDINGS:
+- Intervention type: conditional_steering
+- Affected layers: Layer 3
+- Affected components: resid
+- Mechanism: A steering vector (~3.8 l2_norm) is injected into the residual stream at layer 3 (resid_pre). The vector promotes "stupid" and suppresses "smart" concepts. It activates conditionally on inputs with famous quotes, philosophical statements, or "not" constructions, while leaving most inputs unchanged.
+- Confidence: high
+
+[SCORE] {"total": 0.8325, "type_accuracy": 1.0, "component_f1": 0.5, "layer_iou": 1.0, "key_fact_score": 1.0, "efficiency": 0.825, "predicted_type": "conditional_steering", "predicted_components": [[3, "resid"], [3, "head.8"], [2, "resid"]], "predicted_layers": [3], "tool_calls_used": 17}

@@ -1,0 +1,359 @@
+=== EPISODE: difficulty=1 seed=2 ===
+Intervention: head_ablation
+Ground truth: {(1, 'head.1')}
+Ground truth layers: {1}
+
+--- SYSTEM PROMPT ---
+You are an interpretability researcher investigating a modified GPT-2-small model. A known intervention has been applied to the base model to produce a "modified" model. Your job is to identify:
+1. What TYPE of intervention was applied
+2. WHERE in the model it was applied (layer, component)
+3. WHY it causes the observed behavioral differences
+
+You have a budget of 40 tool calls. Use them wisely.
+
+## Initial Behavior Samples
+
+Here are 5 examples where the base and modified models diverge:
+
+### Sample 1
+**Input:** The inventor of the telephone was
+**Base output:**  a man who had been a member of the British Parliament for more than a century. He was a man who had been a member of the British Parliament for more than a century. He was a man who had been a member of the British Parliament for
+**Modified output:**  a man named John D. Rockefeller. He was a man who had been a man of great influence in the world of finance. He was a man who had been a man of great influence in the world of finance. He was a man who had
+**Base top-5:** [(' a', 0.12256541103124619), (' an', 0.03244158625602722), (' not', 0.02827407233417034), (' the', 0.02803885005414486), (' one', 0.018894575536251068)]
+**Modified top-5:** [(' a', 0.13480155169963837), (' an', 0.03604146093130112), (' the', 0.03136901929974556), (' not', 0.02467871457338333), (' one', 0.015155011788010597)]
+
+### Sample 2
+**Input:** This book is
+**Base output:**  a must-read for anyone who wants to learn about the history of the American Revolution. It is a must-read for anyone who wants to learn about the history of the American Revolution. It is a must-read for anyone who wants to learn
+**Modified output:**  a must-read for anyone who wants to learn about the history of the American Revolution. It is a must-read for anyone who wants to learn about the history of the American Revolution. It is a must-read for anyone who wants to learn
+**Base top-5:** [(' a', 0.18121421337127686), (' about', 0.07039017230272293), (' an', 0.04888122156262398), (' the', 0.046181097626686096), (' for', 0.03795446828007698)]
+**Modified top-5:** [(' a', 0.2079266905784607), (' an', 0.057048194110393524), (' about', 0.04883832111954689), (' the', 0.041130222380161285), (' not', 0.03738180547952652)]
+
+### Sample 3
+**Input:** The longest river in the world is
+**Base output:**  the Great River, which flows through the heart of the United States. It is the largest river in the world, and it flows through the heart of the United States.
+
+The Great River is the largest river in the world, and it flows
+**Modified output:**  the Great River, which flows through the heart of the United States. It is the largest river in the world, and it flows through the heart of the United States.
+
+The Great River is the largest river in the world, and it flows
+**Base top-5:** [(' the', 0.06638393551111221), (' now', 0.048319943249225616), (' a', 0.02917659655213356), (' about', 0.022872205823659897), (' known', 0.020464984700083733)]
+**Modified top-5:** [(' the', 0.09467539191246033), (' now', 0.030985085293650627), (' about', 0.02582644857466221), (' a', 0.024389807134866714), (' known', 0.023113153874874115)]
+
+### Sample 4
+**Input:** red blue red blue red blue red
+**Base output:**  blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red
+**Modified output:**  blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red blue red
+**Base top-5:** [(' blue', 0.43679556250572205), (' red', 0.21631671488285065), ('\n', 0.04525936767458916), (' green', 0.03088366985321045), (' orange', 0.014347812160849571)]
+**Modified top-5:** [(' blue', 0.30674293637275696), (' red', 0.21369346976280212), ('\n', 0.07744648307561874), (' green', 0.04013432189822197), (' white', 0.016353312879800797)]
+
+### Sample 5
+**Input:** The capital of Italy is
+**Base output:**  now home to the world's largest concentration of migrant workers.
+
+The migrant crisis has been a major driver of the country's economic growth, with the number of migrants arriving in Italy rising from 1.3 million in 2011 to 2.1 million
+**Modified output:**  the capital of the world's largest economy, and the country's economy is growing at a rapid rate.
+
+The country's economy grew by 2.5 percent in the first quarter of this year, the fastest pace since the start of the financial
+**Base top-5:** [(' now', 0.04614751413464546), (' the', 0.04100602865219116), (' a', 0.03964575380086899), (' home', 0.03307703137397766), (' in', 0.029175041243433952)]
+**Modified top-5:** [(' the', 0.052189793437719345), (' now', 0.046044591814279556), (' a', 0.04278893023729324), (' home', 0.04152853786945343), (' Rome', 0.035382989794015884)]
+
+## Available Tools
+
+
+### get_behavior_samples
+Get additional examples where base and modified models diverge. Returns pre-computed samples showing input, base output, modified output, and top-5 next-token predictions for each.
+Parameters:
+  - n: Number of samples (1-20)
+
+### test_input
+Run an agent-crafted input on both models. Returns greedy completions and top-5 predictions. Design diagnostic inputs that target suspected circuits.
+Parameters:
+  - text: Input prompt (max 128 tokens)
+
+### patch_sweep
+For a given input, patch each component at a layer from one model into the other and measure the effect. 'base_to_modified' patches base activations into the modified model (does restoring base behavior revert the change?). Returns per-component metric deltas sorted by magnitude.
+Parameters:
+  - text: Input text
+  - layer: Layer to sweep (0-11)
+  - target_token_pos: Position to measure at (-1 = last, null = last)
+  - metric: Metric to measure
+  - metric_args: For logit_diff: {token_a: str, token_b: str}. null for kl.
+  - direction: string
+
+### scan_all_layers
+Sweep ALL 12 layers at once and return only the top components with signal. Much more efficient than calling patch_sweep layer-by-layer. Use this FIRST to localize the intervention, then use get_activations to confirm.
+Parameters:
+  - text: Input text (use a divergent sample)
+  - metric: Metric to measure
+  - metric_args: For logit_diff: {token_a: str, token_b: str}. null for kl.
+  - direction: string
+  - top_n: Number of top components to return (default 5)
+
+### patch_component
+Patch a single specific component and get detailed output comparison. Use after patch_sweep identifies suspicious components.
+Parameters:
+  - text: string
+  - layer: integer
+  - component: head.N, mlp, resid_pre, or resid_post
+  - direction: string
+
+### get_activations
+Get activation stats and vector handles at a specific component. Returns l2_norm and a vector_id handle for use with vector operation tools. With model='both', also returns cosine_sim, l2_diff, and a diff_vector_id.
+Parameters:
+  - text: string
+  - layer: integer
+  - component: head.N, mlp, resid_pre, or resid_post
+  - token_pos: Token position (null = all)
+  - model: string
+
+### attention_pattern
+Get attention weights for a specific head. Returns the seq_len x seq_len attention matrix. For model='both', returns both patterns and top-10 largest differences.
+Parameters:
+  - text: string
+  - layer: integer
+  - head: integer
+  - model: string
+
+### project_to_vocab
+Project a stored vector to vocabulary space. Shows what tokens the vector points toward (top_k) and away from (bottom_k). Works on any stored vector: head outputs, MLP outputs, difference vectors, arithmetic results.
+Parameters:
+  - vector_id: Handle from get_activations or vector_arithmetic
+  - top_k: integer
+
+### vector_dot
+Compute cosine similarity and dot product between two stored vectors.
+Parameters:
+  - vector_id_a: string
+  - vector_id_b: string
+
+### vector_arithmetic
+Combine stored vectors. Operations applied left to right starting from zero vector. Returns a new vector_id handle.
+Parameters:
+  - operations: array
+
+### steer_and_run
+Add a stored vector (scaled) to the residual stream and observe the effect. Use to causally test whether a vector replicates or reverses the intervention.
+Parameters:
+  - text: string
+  - vector_id: string
+  - scale: number
+  - layer: integer
+  - token_pos: Position to steer at, or 'all'
+  - target_model: string
+
+### state_hypothesis
+State your current hypothesis about the intervention. Receives feedback from a supervisor.
+Parameters:
+  - hypothesis: string
+
+### submit_report
+Submit your final investigation report. This terminates the episode. Must include a FINDINGS section with intervention type, affected layers, affected components, mechanism, and confidence.
+Parameters:
+  - report: string
+
+
+## Instructions
+
+**Efficient investigation strategy (aim for ~5-10 tool calls):**
+
+1. Use scan_all_layers FIRST with a high-divergence sample from above — this sweeps all 12 layers in one call and returns the top components with signal
+2. Use get_activations with model='both' on the top component to confirm (zero norm = ablation, high l2_diff = steering/edit)
+3. Use project_to_vocab on the base_vector_id to characterize what direction was added or removed
+4. Call submit_report immediately — you have enough evidence after steps 1-3 for ablation types
+
+**Only if needed:**
+- Use patch_sweep to examine a single layer in detail
+- Use test_input to craft diagnostic inputs for ambiguous cases (steering vectors, conditional interventions)
+- Use state_hypothesis if you are unsure about the intervention type
+
+**Do NOT over-confirm:** Once get_activations shows clear ablation (modified norm = 0) or clear steering (high l2_diff with non-zero modified), submit your report. Testing multiple inputs to re-verify the same finding wastes budget.
+
+When you are ready, call submit_report with your final analysis. Your report MUST end with a structured summary:
+
+FINDINGS:
+- Intervention type: <type>
+- Affected layers: <list>
+- Affected components: <list>
+- Mechanism: <free-text explanation>
+- Confidence: <high/medium/low>
+
+Possible intervention types: head_ablation, mlp_ablation, mean_ablation, steering_vector, rank1_edit, multi_ablation, conditional_steering, distributed_finetune, adversarial_patch
+
+--- END SYSTEM PROMPT ---
+
+
+[TURN 0] AGENT REASONING:
+Let me start by analyzing the behavioral differences shown in the samples:
+
+1. Sample 1 (inventor of telephone): Both models have similar outputs, both seem to generate repetitive nonsense
+2. Sample 2 (This book is): Identical outputs
+3. Sample 3 (longest river): Identical outputs
+4. Sample 4 (red blue pattern): Very similar outputs, both continue the pattern correctly
+5. Sample 5 (capital of Italy): Different outputs - base says "now home to the world's largest concentration of migrant workers" while modified says "the capital of the world's largest economy"
+
+Looking at the top-5 predictions:
+- Sample 1: Modified has slightly higher probability for 'a' (0.135 vs 0.123)
+- Sample 2: Modified has higher probability for 'a' (0.208 vs 0.181)
+- Sample 3: Modified has higher probability for 'the' (0.095 vs 0.066)
+- Sample 4: Modified has lower probability for 'blue' (0.307 vs 0.437)
+- Sample 5: Modified has higher probability for 'the' (0.052 vs 0.041)
+
+The differences seem subtle and distributed. This doesn't look like a simple ablation. The modified model seems to have slightly different token preferences.
+
+Let me follow the efficient strategy:
+1. First, use scan_all_layers with one of the divergent samples
+2. Then use get_activations to confirm
+3. Use project_to_vocab if needed
+
+I'll start with Sample 1 "The inventor of the telephone was" since it shows divergence.
+
+[TURN 0] AGENT THOUGHT:
+I'll investigate this systematically. Let me start by scanning all layers to identify where the intervention is located.
+
+[CALL 1] scan_all_layers
+  args: {"text": "The inventor of the telephone was", "metric": "kl", "direction": "base_to_modified", "top_n": 10}
+  result: top_components[10]{layer,component,delta}:
+    1,head.1,0.12328
+    6,mlp,0.024615
+    4,mlp,0.022363
+    8,mlp,0.02148
+    7,mlp,0.019598
+    9,mlp,0.016394
+    11,mlp,0.012196
+    2,mlp,0.010615
+    10,mlp,0.0096169
+    2,head.1,0.00624
+total_with_signal: 45
+note: STRONG SIGNAL: L1 head.1 dominates by 5x. Use get_activations(model='both') to confirm.
+
+[TURN 1] AGENT REASONING:
+Excellent! There's a strong signal at layer 1, head 1. It dominates by 5x over the next component. Let me check the activations for this head to see if it's an ablation (zero norm in modified) or a steering/edit (non-zero with high l2_diff).
+
+[TURN 1] AGENT THOUGHT:
+Great! There's a very strong signal at layer 1, head 1. Let me check the activations to determine the intervention type.
+
+[CALL 2] get_activations
+  args: {"text": "The inventor of the telephone was", "layer": 1, "component": "head.1", "token_pos": -1, "model": "both"}
+  result: model: both
+activations[1]{position,token,base_l2_norm,modified_l2_norm,base_vector_id,modified_vector_id,cosine_sim,l2_diff,diff_vector_id}:
+    -1, was,4.9124,0,v_0000_base_L1_head.1_p-1,v_0001_modified_L1_head.1_p-1,0,4.9124,v_0002_diff_L1_head.1_p-1
+note: ABLATION DETECTED: modified model output is zero at [' was']. Use project_to_vocab on the base_vector_id at the last token to characterize what signal was removed, then include l2_norm and direction in your report.
+
+[TURN 2] AGENT REASONING:
+Excellent! The evidence is clear:
+- The modified model's L1 head.1 has norm = 0 (zero output)
+- This indicates a complete ablation of head 1 in layer 1
+- The base model's norm is 4.9124, so this was a functional head that was removed
+
+The patch sweep confirmed that L1 head.1 has the strongest effect by 5x over any other component. The activation check confirmed it's an ablation (modified norm = 0).
+
+Now let me project the base vector to understand what this head was doing before ablation, which will help explain the mechanism.
+
+[CALL 3] project_to_vocab
+  args: {"vector_id": "v_0000_base_L1_head.1_p-1", "top_k": 15}
+  result: projections[15]{token,logit,rank}:
+    "
+",7.1929,1
+    ",",6.7727,2
+     the,6.4281,3
+     of,6.4255,4
+    .,6.3247,5
+    -,6.3132,6
+     and,6.1579,7
+     a,6.0034,8
+    :,5.9841,9
+     ",5.9439,10
+     in,5.9304,11
+     to,5.738,12
+     for,5.6836,13
+     on,5.5595,14
+     that,5.5575,15
+bottom_k[15]{token,logit,rank}:
+    �,-5.5431,1
+     guiActiveUn,-5.5365,2
+    �,-5.5329,3
+    �醒,-5.2557,4
+    aditional,-5.2537,5
+    oreAnd,-5.1381,6
+     councill,-5.1317,7
+    nown,-5.0556,8
+    ickets,-5.0122,9
+     exting,-4.9828,10
+    �,-4.9629,11
+    ,-4.9627,12
+    ,-4.9539,13
+    �,-4.9355,14
+    龍�,-4.9341,15
+
+[TURN 3] AGENT REASONING:
+Now I have a clear picture:
+- Layer 1, head 1 has been ablated (norm = 0 in modified model)
+- The base model's head 1 at layer 1 produces outputs that strongly promote punctuation and common tokens (newlines, commas, "the", "of", etc.)
+- This is a head ablation intervention
+
+Let me verify this is consistent across different inputs to confirm this is a global ablation and not conditional. I'll test one more sample.
+
+[CALL 4] get_activations
+  args: {"text": "The capital of Italy is", "layer": 1, "component": "head.1", "token_pos": -1, "model": "both"}
+  result: model: both
+activations[1]{position,token,base_l2_norm,modified_l2_norm,base_vector_id,modified_vector_id,cosine_sim,l2_diff,diff_vector_id}:
+    -1, is,5.3416,0,v_0003_base_L1_head.1_p-1,v_0004_modified_L1_head.1_p-1,0,5.3416,v_0005_diff_L1_head.1_p-1
+note: ABLATION DETECTED: modified model output is zero at [' is']. Use project_to_vocab on the base_vector_id at the last token to characterize what signal was removed, then include l2_norm and direction in your report.
+
+[TURN 4] AGENT REASONING:
+Perfect! I now have clear evidence:
+
+1. **Intervention type**: Head ablation
+2. **Location**: Layer 1, Head 1 (L1 head.1)
+3. **Mechanism**: The head has been zeroed out completely (modified_l2_norm = 0)
+4. **Effect**: This head was promoting punctuation and common function tokens (commas, periods, "the", "of", "and") and suppressing rare/nonsense tokens. Removing it likely affects the model's ability to properly structure sentences.
+
+The scan_all_layers showed L1 head.1 as the dominant component (0.12328, 5x stronger than any other signal). The get_activations confirmed it's a complete ablation (modified norm = 0).
+
+I have enough evidence to submit my report now.
+
+[TURN 4] AGENT THOUGHT:
+I have clear evidence. Let me submit the report.
+
+[CALL 5] submit_report
+  args: {"report": "## Investigation Summary\n\nThe modified model has undergone a **head ablation** intervention at **Layer 1, Head 1**.\n\n### Evidence\n\n1. **Layer Scan**: `scan_all_layers` identified L1 head.1 as the dominant component with KL divergence of 0.12328, which was 5x stronger than the next largest signal (L6 MLP at 0.024615).\n\n2. **Activation Analysis**: `get_activations` confirmed complete ablation:\n   - Base model L2 norm: 4.91-5.34 (active output)\n   - Modified model L2 norm: 0.0 (completely zeroed)\n   - Cosine similarity: 0.0 (indicating the head output was set to zero)\n\n3. **Consistency**: The ablation was verified across multiple input tokens (\"was\", \"is\"), confirming this is not a position-specific or conditional intervention.\n\n### What the Head Did\n\nThe ablated head (L1 head.1) was promoting common structural tokens:\n- **Top promoted tokens**: newlines, commas, \"the\", \"of\", periods, hyphens, \"and\", \"a\", colons, quotation marks\n- **Suppressed tokens**: Rare Unicode characters and uncommon word fragments\n\nThis head appears to contribute to basic sentence structure and punctuation patterns in early layers of the model.\n\n### Behavioral Impact\n\nRemoving this head reduces the model's tendency to output common structural elements, which may explain the slight differences in continuation patterns seen in the behavior samples, though the overall model output remains relatively coherent since this is only one early-layer head among many.\n\n---\n\nFINDINGS:\n- Intervention type: head_ablation\n- Affected layers: [1]\n- Affected components: [head.1]\n- Mechanism: Layer 1 Head 1 was completely zeroed out (ablated), removing its contribution to the residual stream. The head normally promotes punctuation and common function tokens important for basic sentence structure.\n- Confidence: high"}
+
+[REPORT]
+## Investigation Summary
+
+The modified model has undergone a **head ablation** intervention at **Layer 1, Head 1**.
+
+### Evidence
+
+1. **Layer Scan**: `scan_all_layers` identified L1 head.1 as the dominant component with KL divergence of 0.12328, which was 5x stronger than the next largest signal (L6 MLP at 0.024615).
+
+2. **Activation Analysis**: `get_activations` confirmed complete ablation:
+   - Base model L2 norm: 4.91-5.34 (active output)
+   - Modified model L2 norm: 0.0 (completely zeroed)
+   - Cosine similarity: 0.0 (indicating the head output was set to zero)
+
+3. **Consistency**: The ablation was verified across multiple input tokens ("was", "is"), confirming this is not a position-specific or conditional intervention.
+
+### What the Head Did
+
+The ablated head (L1 head.1) was promoting common structural tokens:
+- **Top promoted tokens**: newlines, commas, "the", "of", periods, hyphens, "and", "a", colons, quotation marks
+- **Suppressed tokens**: Rare Unicode characters and uncommon word fragments
+
+This head appears to contribute to basic sentence structure and punctuation patterns in early layers of the model.
+
+### Behavioral Impact
+
+Removing this head reduces the model's tendency to output common structural elements, which may explain the slight differences in continuation patterns seen in the behavior samples, though the overall model output remains relatively coherent since this is only one early-layer head among many.
+
+---
+
+FINDINGS:
+- Intervention type: head_ablation
+- Affected layers: [1]
+- Affected components: [head.1]
+- Mechanism: Layer 1 Head 1 was completely zeroed out (ablated), removing its contribution to the residual stream. The head normally promotes punctuation and common function tokens important for basic sentence structure.
+- Confidence: high
+
+[SCORE] {"total": 0.895, "type_accuracy": 1.0, "component_f1": 0.6666666666666666, "layer_iou": 1.0, "key_fact_score": 1.0, "efficiency": 0.95, "predicted_type": "head_ablation", "predicted_components": [[1, "head.1"], [1, "resid"]], "predicted_layers": [1], "tool_calls_used": 5}
