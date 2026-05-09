@@ -28,7 +28,7 @@ class InterventionVerifier(TrajectoryVerifier):
             "total_reward": total_reward,
             "steps": steps,
             "tool_calls": steps,
-            "policy_violations": 0,
+            "policy_violations": final_info.get("policy_violations", 0),
             "terminated_early": done and steps < len(actions),
             "invalid_actions": invalid_actions,
             "info_trace": info_trace,

@@ -1,12 +1,22 @@
 import json
-from base.env import ToolEnv
+
 from base.data import Data
-from vectors import VectorRegister
+from base.env import ToolEnv
+from episode import generate_episode
+from eval import evaluate, extract_layers
+from prompts import build_system_prompt
 from tools import dispatch_tool
 from toon import encode as toon_encode
-from prompts import build_system_prompt
-from episode import generate_episode
-from eval import evaluate
+from vectors import VectorRegister
+
+_LAYER_TOOLS = {
+    "patch_sweep",
+    "patch_component",
+    "get_activations",
+    "attention_pattern",
+    "compare_weights",
+}
+_ALL_SCAN_TOOLS = {"scan_all_layers", "scan_residual_stream"}
 
 
 class InterventionEnv(ToolEnv):
@@ -19,6 +29,9 @@ class InterventionEnv(ToolEnv):
         self._done = False
 
     def reset(self, data: Data) -> str:
+        self._hypothesis_called = False
+        self._queried_layers = set()
+        self._all_layers_scanned = False
         self._episode = {
             "intervention": data.intervention,
             "samples": data.samples,
@@ -46,20 +59,58 @@ class InterventionEnv(ToolEnv):
         try:
             result = dispatch_tool(name, args, self._episode, self._register)
         except Exception as e:
-            return (f"tool error: {e}", 0.0, False, {"tool": name, "tool_count": self._tool_count, "error": True})
+            return (
+                f"tool error: {e}",
+                0.0,
+                False,
+                {"tool": name, "tool_count": self._tool_count, "error": True},
+            )
+
+        if name == "state_hypothesis":
+            self._hypothesis_called = True
+        elif name in _LAYER_TOOLS and "layer" in args:
+            self._queried_layers.add(int(args["layer"]))
+        elif name in _ALL_SCAN_TOOLS:
+            self._all_layers_scanned = True
 
         if name == "submit_report":
             report = args.get("report", "")
             score = evaluate(report, self._episode["intervention"], self._tool_count)
+
+            violations = 0
+            if not self._hypothesis_called:
+                violations += 1
+            observed = (
+                set(range(12)) if self._all_layers_scanned else self._queried_layers
+            )
+            hallucinated = extract_layers(report) - observed
+            violations += len(hallucinated)
+            score["total"] = max(0.0, score["total"] - 0.1 * violations)
+            score["policy_violations"] = violations
+
             self._done = True
-            return (report, score["total"], True, {"score": score, "tool_count": self._tool_count})
+            return (
+                report,
+                score["total"],
+                True,
+                {
+                    "score": score,
+                    "tool_count": self._tool_count,
+                    "policy_violations": violations,
+                },
+            )
 
         obs = toon_encode(result)
 
         if self._tool_count >= self.budget:
             score = evaluate("", self._episode["intervention"], self._tool_count)
             self._done = True
-            return ("budget exhausted", score["total"], True, {"score": score, "tool_count": self._tool_count})
+            return (
+                "budget exhausted",
+                score["total"],
+                True,
+                {"score": score, "tool_count": self._tool_count},
+            )
 
         return (obs, 0.0, False, {"tool": name, "tool_count": self._tool_count})
 
@@ -71,10 +122,12 @@ class InterventionEnv(ToolEnv):
             ep = generate_episode(difficulty, seed + attempts)
             attempts += 1
             if ep["samples"]:
-                results.append(Data(
-                    samples=ep["samples"],
-                    intervention=ep["intervention"],
-                    difficulty=difficulty,
-                    seed=seed + attempts - 1,
-                ))
+                results.append(
+                    Data(
+                        samples=ep["samples"],
+                        intervention=ep["intervention"],
+                        difficulty=difficulty,
+                        seed=seed + attempts - 1,
+                    )
+                )
         return results
